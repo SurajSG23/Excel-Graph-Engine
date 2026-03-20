@@ -74,7 +74,11 @@ export class WorkbookController {
           changedNodeIds.push(target.id);
         }
 
-        if (typeof update.value === "number") {
+        if (
+          typeof update.value === "number" ||
+          typeof update.value === "string" ||
+          typeof update.value === "boolean"
+        ) {
           target.value = update.value;
           if (!changedNodeIds.includes(target.id)) {
             changedNodeIds.push(target.id);

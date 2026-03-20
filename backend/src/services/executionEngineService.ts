@@ -127,7 +127,7 @@ export class ExecutionEngineService {
     formula: string,
     currentSheet: string,
     nodeMap: Map<string, GraphNode>
-  ): { value: number | undefined; error?: string } {
+  ): { value: GraphNode["value"] | undefined; error?: string } {
     try {
       const expression = this.transformFormulaToJs(formula, currentSheet, nodeMap);
       const helpers = {
@@ -152,9 +152,12 @@ export class ExecutionEngineService {
         return { value: raw };
       }
 
-      if (typeof raw === "string" && raw.trim() !== "") {
-        const num = Number(raw);
-        return Number.isFinite(num) ? { value: num } : { value: undefined };
+      if (typeof raw === "string") {
+        return { value: raw };
+      }
+
+      if (typeof raw === "boolean") {
+        return { value: raw };
       }
 
       return { value: undefined };

@@ -11,9 +11,7 @@ export class ExportService {
       const ws: XLSX.WorkSheet = {};
 
       for (const node of sheetNodes) {
-        ws[node.cell] = node.formula
-          ? { t: "n", f: node.formula.startsWith("=") ? node.formula.slice(1) : node.formula, v: node.value ?? 0 }
-          : { t: "n", v: node.value ?? 0 };
+        ws[node.cell] = this.toCellObject(node);
       }
 
       const addresses = sheetNodes.map((node) => XLSX.utils.decode_cell(node.cell));
@@ -29,5 +27,26 @@ export class ExportService {
     const outPath = path.resolve(process.cwd(), "exports", `${workbookId}-export.xlsx`);
     XLSX.writeFile(workbook, outPath);
     return outPath;
+  }
+
+  private toCellObject(node: GraphNode): XLSX.CellObject {
+    const value = node.value;
+    const formulaBody = node.formula?.startsWith("=") ? node.formula.slice(1) : node.formula;
+
+    const cellType: XLSX.CellObject["t"] =
+      typeof value === "number" ? "n" : typeof value === "boolean" ? "b" : "s";
+
+    if (formulaBody) {
+      return {
+        t: cellType,
+        f: formulaBody,
+        v: value ?? ""
+      };
+    }
+
+    return {
+      t: cellType,
+      v: value ?? ""
+    };
   }
 }

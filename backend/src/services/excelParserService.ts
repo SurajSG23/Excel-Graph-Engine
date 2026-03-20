@@ -22,7 +22,11 @@ export class ExcelParserService {
           continue;
         }
 
-        const value = typeof cell.v === "number" ? cell.v : undefined;
+        const raw = cell.v;
+        const value =
+          typeof raw === "number" || typeof raw === "string" || typeof raw === "boolean"
+            ? raw
+            : undefined;
         const formula = cell.f ? `=${cell.f}` : undefined;
 
         cells.push({

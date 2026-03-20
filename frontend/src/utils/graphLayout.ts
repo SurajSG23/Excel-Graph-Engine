@@ -1,6 +1,6 @@
 ﻿import dagre from "dagre";
 import { Edge, MarkerType, Node } from "@xyflow/react";
-import { GraphEdge, GraphNode } from "../types/workbook";
+import { CellValue, GraphEdge, GraphNode } from "../types/workbook";
 
 const SHEET_COLORS = ["#16a34a", "#2563eb", "#9333ea", "#ea580c", "#0891b2", "#ca8a04", "#be123c"];
 const ROLE_COLORS = {
@@ -26,7 +26,7 @@ export interface FlowCellData {
   label: string;
   id: string;
   sheet: string;
-  value?: number;
+  value?: CellValue;
   formula?: string;
   color: string;
   roleColor: string;

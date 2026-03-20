@@ -1,9 +1,11 @@
+export type CellValue = string | number | boolean;
+
 export interface GraphNode {
   id: string;
   sheet: string;
   cell: string;
   formula?: string;
-  value?: number;
+  value?: CellValue;
   dependencies: string[];
 }
 
@@ -31,7 +33,7 @@ export interface WorkbookGraph {
 export interface NodeUpdate {
   id: string;
   formula?: string;
-  value?: number;
+  value?: CellValue;
 }
 
 export interface VersionItem {

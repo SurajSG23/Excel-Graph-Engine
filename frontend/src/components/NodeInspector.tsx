@@ -1,6 +1,18 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useWorkbookStore } from "../store/workbookStore";
 
+function formatNodeValue(value: string | number | boolean | undefined): string {
+  if (value === undefined) {
+    return "available";
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "TRUE" : "FALSE";
+  }
+
+  return String(value);
+}
+
 export function NodeInspector() {
   const workbook = useWorkbookStore((s) => s.workbook);
   const selectedNodeId = useWorkbookStore((s) => s.selectedNodeId);
@@ -43,7 +55,7 @@ export function NodeInspector() {
         <dt>Cell</dt>
         <dd>{node.cell}</dd>
         <dt>Computed Value</dt>
-        <dd>{typeof node.value === "number" ? node.value : "N/A"}</dd>
+        <dd>{formatNodeValue(node.value)}</dd>
         <dt>Dependencies</dt>
         <dd>{node.dependencies.length > 0 ? node.dependencies.join(", ") : "None"}</dd>
       </dl>

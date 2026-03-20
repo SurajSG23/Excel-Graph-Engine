@@ -5,17 +5,21 @@ import {
   MiniMap,
   Panel,
   ReactFlow,
-  ReactFlowInstance
+  ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useWorkbookStore } from "../store/workbookStore";
-import { buildTraversalSets, toFlowEdges, toFlowNodes } from "../utils/graphLayout";
+import {
+  buildTraversalSets,
+  toFlowEdges,
+  toFlowNodes,
+} from "../utils/graphLayout";
 import { CellNode } from "./CellNode";
 import { SheetGroupNode } from "./SheetGroupNode";
 
 const nodeTypes = {
   cellNode: CellNode,
-  sheetGroup: SheetGroupNode
+  sheetGroup: SheetGroupNode,
 };
 
 export function GraphCanvas() {
@@ -26,15 +30,17 @@ export function GraphCanvas() {
   const setSelectedNode = useWorkbookStore((s) => s.setSelectedNode);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1);
-  const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
+  const [reactFlowInstance, setReactFlowInstance] =
+    useState<ReactFlowInstance | null>(null);
   const lastFitKey = useRef<string>("");
 
   const filtered = useMemo(() => {
     if (!workbook) return { nodes: [], edges: [] };
 
-    const sheetNodes = selectedSheet === "ALL"
-      ? workbook.nodes
-      : workbook.nodes.filter((node) => node.sheet === selectedSheet);
+    const sheetNodes =
+      selectedSheet === "ALL"
+        ? workbook.nodes
+        : workbook.nodes.filter((node) => node.sheet === selectedSheet);
 
     const query = searchText.trim().toLowerCase();
     const visibleNodes = query
@@ -42,12 +48,14 @@ export function GraphCanvas() {
           (node) =>
             node.id.toLowerCase().includes(query) ||
             node.cell.toLowerCase().includes(query) ||
-            (node.formula ?? "").toLowerCase().includes(query)
+            (node.formula ?? "").toLowerCase().includes(query),
         )
       : sheetNodes;
 
     const idSet = new Set(visibleNodes.map((n) => n.id));
-    const visibleEdges = workbook.edges.filter((edge) => idSet.has(edge.source) && idSet.has(edge.target));
+    const visibleEdges = workbook.edges.filter(
+      (edge) => idSet.has(edge.source) && idSet.has(edge.target),
+    );
 
     return { nodes: visibleNodes, edges: visibleEdges };
   }, [searchText, selectedSheet, workbook]);
@@ -56,7 +64,10 @@ export function GraphCanvas() {
 
   const highlight = useMemo(() => {
     if (!activeNodeId || !workbook) return new Set<string>();
-    const { upstream, downstream } = buildTraversalSets(activeNodeId, workbook.edges);
+    const { upstream, downstream } = buildTraversalSets(
+      activeNodeId,
+      workbook.edges,
+    );
     return new Set<string>([activeNodeId, ...upstream, ...downstream]);
   }, [activeNodeId, workbook]);
 
@@ -91,13 +102,14 @@ export function GraphCanvas() {
       errorNodeIds,
       circularNodeIds,
       errorCount: allIssues.length,
-      circularCount: allIssues.filter((i) => i.type === "CIRCULAR_DEPENDENCY").length
+      circularCount: allIssues.filter((i) => i.type === "CIRCULAR_DEPENDENCY")
+        .length,
     };
   }, [workbook]);
 
   const nodeSheetMap = useMemo(
     () => new Map((workbook?.nodes ?? []).map((node) => [node.id, node.sheet])),
-    [workbook]
+    [workbook],
   );
 
   const flowNodes = useMemo(
@@ -110,7 +122,7 @@ export function GraphCanvas() {
         errorNodeIds: issueSummary.errorNodeIds,
         circularNodeIds: issueSummary.circularNodeIds,
         selectedSheet,
-        zoomLevel
+        zoomLevel,
       }),
     [
       filtered.nodes,
@@ -122,13 +134,20 @@ export function GraphCanvas() {
       issueSummary.errorNodeIds,
       issueSummary.circularNodeIds,
       selectedSheet,
-      zoomLevel
-    ]
+      zoomLevel,
+    ],
   );
 
   const flowEdges = useMemo(
-    () => toFlowEdges(filtered.edges, highlight, nodeSheetMap, selectedNodeId, hoveredNodeId),
-    [filtered.edges, highlight, nodeSheetMap, selectedNodeId, hoveredNodeId]
+    () =>
+      toFlowEdges(
+        filtered.edges,
+        highlight,
+        nodeSheetMap,
+        selectedNodeId,
+        hoveredNodeId,
+      ),
+    [filtered.edges, highlight, nodeSheetMap, selectedNodeId, hoveredNodeId],
   );
 
   const [nodes, setNodes] = useState(flowNodes);
@@ -162,7 +181,14 @@ export function GraphCanvas() {
     });
 
     return () => cancelAnimationFrame(handle);
-  }, [reactFlowInstance, workbook, selectedSheet, searchText, filtered.nodes.length, filtered.edges.length]);
+  }, [
+    reactFlowInstance,
+    workbook,
+    selectedSheet,
+    searchText,
+    filtered.nodes.length,
+    filtered.edges.length,
+  ]);
 
   if (!workbook) {
     return (
@@ -208,7 +234,10 @@ export function GraphCanvas() {
             if (node.type === "sheetGroup") {
               return "#eaf4ee";
             }
-            return String((node.data as { roleColor?: string } | undefined)?.roleColor ?? "#94a3b8");
+            return String(
+              (node.data as { roleColor?: string } | undefined)?.roleColor ??
+                "#94a3b8",
+            );
           }}
           maskColor="rgba(22,101,52,0.08)"
         />
@@ -218,10 +247,14 @@ export function GraphCanvas() {
             <h4>Workbook Graph</h4>
             <p>Select a node to trace upstream and downstream impact.</p>
             <div className="graph-help-stats">
-              <span>{nodes.length} nodes</span>
-              <span>{edges.length} edges</span>
-              <span>{issueSummary.errorCount} errors</span>
-              <span>{issueSummary.circularCount} cycles</span>
+              <div>
+                <span>{nodes.length} nodes</span>
+                <span>{edges.length} edges</span>
+              </div>
+              <div>
+                <span>{issueSummary.errorCount} errors</span>
+                <span>{issueSummary.circularCount} cycles</span>
+              </div>
             </div>
           </div>
         </Panel>
@@ -229,12 +262,24 @@ export function GraphCanvas() {
           <div className="graph-legend-card">
             <h4>Legend</h4>
             <ul>
-              <li><i className="legend-dot input" /> Input</li>
-              <li><i className="legend-dot computed" /> Computed</li>
-              <li><i className="legend-dot output" /> Output</li>
-              <li><i className="legend-dot error" /> Error/Cycle</li>
-              <li><i className="legend-line same" /> Same-sheet dependency</li>
-              <li><i className="legend-line cross" /> Cross-sheet dependency</li>
+              <li>
+                <i className="legend-dot input" /> Input
+              </li>
+              <li>
+                <i className="legend-dot computed" /> Computed
+              </li>
+              <li>
+                <i className="legend-dot output" /> Output
+              </li>
+              <li>
+                <i className="legend-dot error" /> Error/Cycle
+              </li>
+              <li>
+                <i className="legend-line same" /> Same-sheet dependency
+              </li>
+              <li>
+                <i className="legend-line cross" /> Cross-sheet dependency
+              </li>
             </ul>
           </div>
         </Panel>

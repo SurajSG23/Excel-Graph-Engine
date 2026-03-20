@@ -3,9 +3,21 @@ import { FlowCellData } from "../utils/graphLayout";
 
 type CellFlowNode = Node<FlowCellData, "cellNode">;
 
-function formatValue(value: number | undefined): string {
-  if (typeof value !== "number" || Number.isNaN(value)) {
-    return "N/A";
+function formatValue(value: string | number | boolean | undefined): string {
+  if (value === undefined) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "TRUE" : "FALSE";
+  }
+
+  if (Number.isNaN(value)) {
+    return "";
   }
 
   if (Math.abs(value) >= 1000) {
@@ -55,7 +67,7 @@ export function CellNode({ data }: NodeProps<CellFlowNode>) {
 
       <div className="cell-node-tooltip">
         <p><strong>{nodeData.id}</strong></p>
-        <p>Value: {formatValue(nodeData.value)}</p>
+        <p>Value: {formatValue(nodeData.value) || "available"}</p>
         <p>Formula: {nodeData.formula ?? "(none)"}</p>
         <p>Dependencies: {nodeData.dependencies.length ? nodeData.dependencies.join(", ") : "None"}</p>
       </div>
