@@ -1,34 +1,30 @@
-import { UploadCard } from "./components/UploadCard";
-import { TopBar } from "./components/TopBar";
+import { useState } from "react";
 import { GraphCanvas } from "./components/GraphCanvas";
-import { NodeInspector } from "./components/NodeInspector";
-import { ValidationPanel } from "./components/ValidationPanel";
-import { VersionPanel } from "./components/VersionPanel";
-import { useWorkbookStore } from "./store/workbookStore";
+import { Sidebar } from "./components/Sidebar";
 
 function App() {
-  const workbook = useWorkbookStore((s) => s.workbook);
-  const loading = useWorkbookStore((s) => s.loading);
-  const error = useWorkbookStore((s) => s.error);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell dashboard-shell ${sidebarOpen ? "sidebar-open" : "sidebar-closed"}`}>
       <div className="grain" />
-      <main>
-        <UploadCard />
-        {workbook && <TopBar />}
-
-        {error && <div className="error-banner">{error}</div>}
-        {loading && <div className="loading-banner">Running workbook engine...</div>}
-
-        <section className="workspace-grid">
-          <GraphCanvas />
-          <aside className="side-panels">
-            <NodeInspector />
-            <ValidationPanel />
-            <VersionPanel />
-          </aside>
-        </section>
+      <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen((current) => !current)} />
+      <button
+        type="button"
+        className="sidebar-backdrop"
+        aria-label="Close controls panel"
+        onClick={() => setSidebarOpen(false)}
+      />
+      <main className="dashboard-main">
+        <button
+          type="button"
+          className="sidebar-fab icon-button"
+          onClick={() => setSidebarOpen((current) => !current)}
+          aria-label={sidebarOpen ? "Hide controls panel" : "Show controls panel"}
+        >
+          <span className={sidebarOpen ? "icon-chevron-left" : "icon-menu"} aria-hidden="true" />
+        </button>
+        <GraphCanvas />
       </main>
     </div>
   );

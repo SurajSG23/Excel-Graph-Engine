@@ -14,14 +14,14 @@ export function UploadCard() {
   };
 
   return (
-    <section className="upload-card">
-      <h1>Excel Graph Engine</h1>
-      <p>Upload an .xlsx workbook and convert every sheet into one connected dependency graph.</p>
-      <label className="upload-input">
-        <input type="file" accept=".xlsx" onChange={onFileChange} disabled={loading} />
-        <span>{loading ? "Processing workbook..." : "Select workbook"}</span>
-      </label>
-      {selectedFileName && <small>Loaded: {selectedFileName}</small>}
+    <section className="upload-card panel">
+        <summary>File Upload</summary>
+        <p>Upload an .xlsx workbook to generate a connected dependency graph.</p>
+        <label className="upload-input">
+          <input type="file" accept=".xlsx" onChange={onFileChange} disabled={loading} />
+          <span>{loading ? "Processing workbook..." : "Select workbook"}</span>
+        </label>
+        <small>{selectedFileName ? `Selected: ${selectedFileName}` : "No workbook selected"}</small>
     </section>
   );
 }

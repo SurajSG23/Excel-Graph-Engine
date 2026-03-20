@@ -205,6 +205,8 @@ export function GraphCanvas() {
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        fitView
+        fitViewOptions={{ padding: 0.18 }}
         minZoom={0.25}
         maxZoom={1.8}
         onInit={setReactFlowInstance}
@@ -242,11 +244,9 @@ export function GraphCanvas() {
           }}
           maskColor="rgba(22,101,52,0.08)"
         />
-        <Controls showInteractive={false} />
         <Panel position="top-left">
           <div className="graph-help-card">
-            <h4>Workbook Graph</h4>
-            <p>Select a node to trace upstream and downstream impact.</p>
+            <h4>Stats</h4>
             <div className="graph-help-stats">
               <div>
                 <span>{nodes.length} nodes</span>
@@ -276,14 +276,15 @@ export function GraphCanvas() {
                 <i className="legend-dot error" /> Error/Cycle
               </li>
               <li>
-                <i className="legend-line same" /> Same-sheet dependency
+                <i className="legend-line same" /> Same-sheet
               </li>
               <li>
-                <i className="legend-line cross" /> Cross-sheet dependency
+                <i className="legend-line cross" /> Cross-sheet
               </li>
             </ul>
           </div>
         </Panel>
+        <Controls showInteractive={false} />
         <Background gap={28} size={1.1} color="#d5e7dc" />
       </ReactFlow>
     </section>

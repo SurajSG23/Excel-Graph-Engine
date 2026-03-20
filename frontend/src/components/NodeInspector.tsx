@@ -38,39 +38,43 @@ export function NodeInspector() {
   if (!node) {
     return (
       <section className="panel inspector">
-        <h3>Node Details</h3>
-        <p>Select a node to inspect and edit formulas.</p>
+        <details className="panel-collapsible" open>
+          <summary>Node Details</summary>
+          <p>Select a node to inspect and edit formulas.</p>
+        </details>
       </section>
     );
   }
 
   return (
     <section className="panel inspector">
-      <h3>Node Details</h3>
-      <dl>
-        <dt>ID</dt>
-        <dd>{node.id}</dd>
-        <dt>Sheet</dt>
-        <dd>{node.sheet}</dd>
-        <dt>Cell</dt>
-        <dd>{node.cell}</dd>
-        <dt>Computed Value</dt>
-        <dd>{formatNodeValue(node.value)}</dd>
-        <dt>Dependencies</dt>
-        <dd>{node.dependencies.length > 0 ? node.dependencies.join(", ") : "None"}</dd>
-      </dl>
+      <details className="panel-collapsible" open>
+        <summary>Node Details</summary>
+        <dl>
+          <dt>ID</dt>
+          <dd>{node.id}</dd>
+          <dt>Sheet</dt>
+          <dd>{node.sheet}</dd>
+          <dt>Cell</dt>
+          <dd>{node.cell}</dd>
+          <dt>Computed Value</dt>
+          <dd>{formatNodeValue(node.value)}</dd>
+          <dt>Dependencies</dt>
+          <dd>{node.dependencies.length > 0 ? node.dependencies.join(", ") : "None"}</dd>
+        </dl>
 
-      <form onSubmit={onSubmit} className="formula-form">
-        <label htmlFor="formula">Formula</label>
-        <textarea
-          id="formula"
-          value={formula}
-          onChange={(e) => setFormula(e.target.value)}
-          placeholder="=A1+B1"
-          rows={4}
-        />
-        <button type="submit">Apply + Recompute</button>
-      </form>
+        <form onSubmit={onSubmit} className="formula-form">
+          <label htmlFor="formula">Formula</label>
+          <textarea
+            id="formula"
+            value={formula}
+            onChange={(e) => setFormula(e.target.value)}
+            placeholder="=A1+B1"
+            rows={4}
+          />
+          <button type="submit">Apply + Recompute</button>
+        </form>
+      </details>
     </section>
   );
 }

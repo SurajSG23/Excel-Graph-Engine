@@ -7,23 +7,27 @@ export function ValidationPanel() {
   if (issues.length === 0) {
     return (
       <section className="panel validations">
-        <h3>Validation</h3>
-        <p>No issues detected.</p>
+        <details className="panel-collapsible" open>
+          <summary>Validation</summary>
+          <p>No issues detected.</p>
+        </details>
       </section>
     );
   }
 
   return (
     <section className="panel validations">
-      <h3>Validation ({issues.length})</h3>
-      <ul>
-        {issues.map((issue, idx) => (
-          <li key={`${issue.type}-${idx}`} className="issue-item">
-            <strong>{issue.type}</strong>
-            <span>{issue.message}</span>
-          </li>
-        ))}
-      </ul>
+      <details className="panel-collapsible" open>
+        <summary>Validation ({issues.length})</summary>
+        <ul>
+          {issues.map((issue, idx) => (
+            <li key={`${issue.type}-${idx}`} className="issue-item">
+              <strong>{issue.type}</strong>
+              <span>{issue.message}</span>
+            </li>
+          ))}
+        </ul>
+      </details>
     </section>
   );
 }

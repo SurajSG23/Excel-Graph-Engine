@@ -9,33 +9,36 @@ export function TopBar() {
   const triggerExport = useWorkbookStore((s) => s.triggerExport);
 
   return (
-    <header className="topbar">
-      <div className="toolbar-group">
-        <label>
-          Sheet
-          <select value={selectedSheet} onChange={(e) => setSelectedSheet(e.target.value)}>
-            <option value="ALL">All Sheets</option>
-            {workbook?.sheets.map((sheet) => (
-              <option key={sheet} value={sheet}>
-                {sheet}
-              </option>
-            ))}
-          </select>
-        </label>
+    <section className="panel topbar">
+      <details className="panel-collapsible" open>
+        <summary>Graph Controls</summary>
+        <div className="toolbar-group">
+          <label>
+            Sheet Selector
+            <select value={selectedSheet} onChange={(e) => setSelectedSheet(e.target.value)}>
+              <option value="ALL">All Sheets</option>
+              {workbook?.sheets.map((sheet) => (
+                <option key={sheet} value={sheet}>
+                  {sheet}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label>
-          Search
-          <input
-            value={searchText}
-            placeholder="Node, cell, formula"
-            onChange={(e) => setSearchText(e.target.value)}
-          />
-        </label>
-      </div>
+          <label>
+            Search Nodes
+            <input
+              value={searchText}
+              placeholder="Node, cell, formula"
+              onChange={(e) => setSearchText(e.target.value)}
+            />
+          </label>
+        </div>
 
-      <button onClick={() => triggerExport()} disabled={!workbook}>
-        Export Workbook
-      </button>
-    </header>
+        <button onClick={() => triggerExport()} disabled={!workbook}>
+          Export Workbook
+        </button>
+      </details>
+    </section>
   );
 }
