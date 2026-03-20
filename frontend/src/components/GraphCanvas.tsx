@@ -229,6 +229,7 @@ export function GraphCanvas() {
         <MiniMap
           pannable
           zoomable
+          style={{ width: 130, height: 78, borderRadius: 8 }}
           nodeBorderRadius={8}
           nodeColor={(node) => {
             if (node.type === "sheetGroup") {
@@ -241,7 +242,7 @@ export function GraphCanvas() {
           }}
           maskColor="rgba(22,101,52,0.08)"
         />
-        <Controls />
+        <Controls showInteractive={false} />
         <Panel position="top-left">
           <div className="graph-help-card">
             <h4>Workbook Graph</h4>

@@ -137,6 +137,7 @@ button:hover {
 .canvas-shell {
   min-height: 72vh;
   overflow: hidden;
+  border: 1px dotted black;
 }
 
 .canvas-shell .react-flow__pane {
@@ -179,21 +180,22 @@ button:hover {
 .graph-help-card {
   background: rgba(255, 255, 255, 0.93);
   border: 1px solid #d7e8dd;
-  border-radius: 12px;
-  padding: 0.62rem 0.72rem;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.09);
+  border-radius: 10px;
+  padding: 0.45rem 0.52rem;
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
   backdrop-filter: blur(3px);
+  max-width: 210px;
 }
 
 .graph-help-card h4 {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
 }
 
 .graph-help-card p {
-  margin: 0.35rem 0 0.45rem;
-  max-width: 250px;
-  font-size: 0.78rem;
+  margin: 0.22rem 0 0.34rem;
+  max-width: 200px;
+  font-size: 0.68rem;
   color: #475569;
 }
 
@@ -204,24 +206,24 @@ button:hover {
 
 .graph-help-stats span {
   font-family: "IBM Plex Mono", monospace;
-  font-size: 0.75rem;
+  font-size: 0.64rem;
   border: 1px solid #d3e7da;
   border-radius: 999px;
   background: #fff;
-  padding: 0.2rem 0.5rem;
+  padding: 0.14rem 0.38rem;
 }
 
 .graph-legend-card {
   background: rgba(255, 255, 255, 0.94);
   border: 1px solid #d7e8dd;
-  border-radius: 12px;
-  padding: 0.6rem 0.72rem;
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+  border-radius: 10px;
+  padding: 0.42rem 0.5rem;
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
 }
 
 .graph-legend-card h4 {
-  margin: 0 0 0.4rem;
-  font-size: 0.84rem;
+  margin: 0 0 0.24rem;
+  font-size: 0.74rem;
 }
 
 .graph-legend-card ul {
@@ -229,19 +231,19 @@ button:hover {
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 0.3rem;
+  gap: 0.2rem;
 }
 
 .graph-legend-card li {
   display: flex;
   align-items: center;
-  gap: 0.42rem;
-  font-size: 0.74rem;
+  gap: 0.32rem;
+  font-size: 0.64rem;
 }
 
 .legend-dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 999px;
   display: inline-block;
 }
@@ -260,9 +262,9 @@ button:hover {
 }
 
 .legend-line {
-  width: 16px;
+  width: 12px;
   height: 0;
-  border-top: 2px solid;
+  border-top: 1.5px solid;
   display: inline-block;
 }
 
