@@ -17,31 +17,48 @@ function formatValue(value: number | undefined): string {
 
 export function CellNode({ data }: NodeProps<CellFlowNode>) {
   const nodeData = data;
-  const formulaPreview = (nodeData.formula ?? "(constant value)").slice(0, 42);
+  const roleLabel = nodeData.role === "computed" ? "Computed" :
+    nodeData.role === "output" ? "Output" :
+      nodeData.role === "error" ? "Error" :
+        nodeData.role === "circular" ? "Circular" : "Input";
 
   return (
     <article
-      className={`cell-node ${nodeData.isHighlighted ? "is-highlighted" : ""} ${nodeData.isSelected ? "is-selected" : ""}`}
+      className={[
+        "cell-node",
+        `role-${nodeData.role}`,
+        nodeData.isDimmed ? "is-dimmed" : "",
+        nodeData.isHighlighted ? "is-highlighted" : "",
+        nodeData.isHovered ? "is-hovered" : "",
+        nodeData.isSelected ? "is-selected" : ""
+      ].join(" ")}
       style={{
-        ["--sheet-color" as string]: nodeData.color
+        ["--sheet-color" as string]: nodeData.color,
+        ["--role-color" as string]: nodeData.roleColor
       }}
     >
       <Handle type="target" position={Position.Left} className="cell-node-handle" />
       <header className="cell-node-header">
         <strong>{nodeData.label}</strong>
-        <span>{nodeData.sheet}</span>
+        {nodeData.showExtra && <span>{nodeData.sheet}</span>}
       </header>
+
+      <div className="cell-node-role">{roleLabel}</div>
 
       <div className="cell-node-value">{formatValue(nodeData.value)}</div>
 
-      <p className="cell-node-formula" title={nodeData.formula ?? "No formula"}>
-        {formulaPreview}
-        {formulaPreview.length < (nodeData.formula ?? "").length ? "..." : ""}
-      </p>
-
       <footer className="cell-node-footer">
-        <span>{nodeData.dependencyCount} deps</span>
+        {nodeData.showExtra && <span>{nodeData.dependencyCount} deps</span>}
+        {nodeData.isUpstream && <span className="dir-chip">upstream</span>}
+        {nodeData.isDownstream && <span className="dir-chip">downstream</span>}
       </footer>
+
+      <div className="cell-node-tooltip">
+        <p><strong>{nodeData.id}</strong></p>
+        <p>Value: {formatValue(nodeData.value)}</p>
+        <p>Formula: {nodeData.formula ?? "(none)"}</p>
+        <p>Dependencies: {nodeData.dependencies.length ? nodeData.dependencies.join(", ") : "None"}</p>
+      </div>
 
       <Handle type="source" position={Position.Right} className="cell-node-handle" />
     </article>

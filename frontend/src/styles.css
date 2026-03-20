@@ -147,6 +147,10 @@ button:hover {
   cursor: pointer;
 }
 
+.canvas-shell .react-flow__node-sheetGroup {
+  cursor: default;
+}
+
 .canvas-shell .react-flow__node.dragging {
   cursor: grabbing;
 }
@@ -196,38 +200,129 @@ button:hover {
   padding: 0.2rem 0.5rem;
 }
 
+.graph-legend-card {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid #d7e8dd;
+  border-radius: 12px;
+  padding: 0.6rem 0.72rem;
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+}
+
+.graph-legend-card h4 {
+  margin: 0 0 0.4rem;
+  font-size: 0.84rem;
+}
+
+.graph-legend-card ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.graph-legend-card li {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  font-size: 0.74rem;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.legend-dot.input { background: #16a34a; }
+.legend-dot.computed { background: #2563eb; }
+.legend-dot.output { background: #9333ea; }
+.legend-dot.error { background: #dc2626; }
+
+.legend-line {
+  width: 16px;
+  height: 0;
+  border-top: 2px solid;
+  display: inline-block;
+}
+
+.legend-line.same { border-color: #059669; }
+.legend-line.cross { border-color: #8b5cf6; border-top-style: dashed; }
+
+.react-flow__edge.edge-cross-sheet .react-flow__edge-path {
+  filter: drop-shadow(0 0 2px rgba(139, 92, 246, 0.2));
+}
+
+.sheet-group-node {
+  width: 100%;
+  height: 100%;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--sheet-color), #cbd5e1 30%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--sheet-color), white 93%), #ffffff);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+
+.sheet-group-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.7rem;
+  padding: 0.22rem 0.52rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sheet-color), #ffffff 86%);
+  border: 1px solid color-mix(in srgb, var(--sheet-color), #d1d5db 35%);
+  font-size: 0.72rem;
+  color: #334155;
+}
+
 .cell-node {
   --sheet-color: #94a3b8;
-  width: 132px;
+  --role-color: #16a34a;
+  width: 100%;
+  height: 100%;
   border-radius: 14px;
-  border: 1px solid color-mix(in srgb, var(--sheet-color), #cbd5d1 30%);
+  border: 1px solid color-mix(in srgb, var(--role-color), #cbd5d1 40%);
   background:
-    linear-gradient(180deg, #ffffff 0%, #f8fef9 100%),
-    linear-gradient(130deg, color-mix(in srgb, var(--sheet-color), white 82%) 0%, transparent 50%);
-  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.1);
-  padding: 0.44rem 0.52rem;
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  padding: 0.45rem 0.58rem;
   position: relative;
-  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, opacity 160ms ease;
 }
 
 .cell-node:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 14px 24px rgba(15, 23, 42, 0.16);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
+}
+
+.cell-node.is-dimmed {
+  opacity: 0.25;
 }
 
 .cell-node.is-highlighted {
-  border-color: color-mix(in srgb, var(--sheet-color), #10b981 40%);
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.26), 0 12px 22px rgba(15, 23, 42, 0.12);
+  opacity: 1;
+  border-color: color-mix(in srgb, var(--role-color), #2563eb 18%);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--role-color), #ffffff 66%), 0 10px 18px rgba(15, 23, 42, 0.12);
 }
 
 .cell-node.is-selected {
   border-color: #111827;
-  box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.26), 0 12px 20px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.28), 0 12px 20px rgba(15, 23, 42, 0.16);
 }
+
+.cell-node.role-output {
+  border-width: 2px;
+}
+
+.cell-node.role-computed { --role-color: #2563eb; }
+.cell-node.role-output { --role-color: #9333ea; }
+.cell-node.role-error,
+.cell-node.role-circular { --role-color: #dc2626; }
 
 .cell-node-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: baseline;
   gap: 0.4rem;
 }
@@ -247,36 +342,81 @@ button:hover {
   white-space: nowrap;
 }
 
-.cell-node-value {
-  margin-top: 0.28rem;
-  font-weight: 700;
-  font-size: 0.95rem;
-  color: #1e293b;
+.cell-node-role {
+  margin-top: 0.16rem;
+  display: inline-flex;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--role-color), #ffffff 35%);
+  color: color-mix(in srgb, var(--role-color), #111827 20%);
+  background: color-mix(in srgb, var(--role-color), #ffffff 85%);
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 0.08rem 0.32rem;
 }
 
-.cell-node-formula {
-  margin: 0.35rem 0 0;
-  min-height: 28px;
-  font-family: "IBM Plex Mono", monospace;
-  font-size: 0.68rem;
-  color: #64748b;
-  overflow: hidden;
+.cell-node-value {
+  margin-top: 0.5rem;
+  font-weight: 700;
+  font-size: 1rem;
+  color: #1e293b;
 }
 
 .cell-node-footer {
   margin-top: 0.4rem;
   display: flex;
   justify-content: flex-end;
+  gap: 0.18rem;
+  flex-wrap: wrap;
 }
 
 .cell-node-footer span {
-  font-size: 0.62rem;
+  font-size: 0.58rem;
   letter-spacing: 0.01em;
   text-transform: uppercase;
   color: #065f46;
   background: #dcfce7;
   border-radius: 999px;
   padding: 0.1rem 0.35rem;
+}
+
+.cell-node-footer .dir-chip {
+  color: #1e3a8a;
+  background: #dbeafe;
+}
+
+.cell-node-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  width: 220px;
+  transform: translateX(-50%);
+  border-radius: 10px;
+  border: 1px solid #d4e6da;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.15);
+  padding: 0.45rem 0.55rem;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  z-index: 20;
+}
+
+.cell-node:hover .cell-node-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+.cell-node-tooltip p {
+  margin: 0 0 0.2rem;
+  font-size: 0.66rem;
+  color: #334155;
+  line-height: 1.3;
+}
+
+.cell-node-tooltip p:last-child {
+  margin-bottom: 0;
 }
 
 .cell-node-handle {
