@@ -15,13 +15,24 @@ export function UploadCard() {
 
   return (
     <section className="upload-card panel">
-        <summary>File Upload</summary>
-        <p>Upload an .xlsx workbook to generate a connected dependency graph.</p>
-        <label className="upload-input">
-          <input type="file" accept=".xlsx" onChange={onFileChange} disabled={loading} />
-          <span>{loading ? "Processing workbook..." : "Select workbook"}</span>
-        </label>
-        <small>{selectedFileName ? `Selected: ${selectedFileName}` : "No workbook selected"}</small>
+      <summary>File Upload</summary>
+      <p>Upload an .xlsx workbook to generate a connected dependency graph.</p>
+      <label className={`upload-dropzone ${loading ? "is-loading" : ""}`}>
+        <input
+          className="upload-input-native"
+          type="file"
+          accept=".xlsx"
+          onChange={onFileChange}
+          disabled={loading}
+        />
+        <span className="upload-dropzone-line upload-dropzone-title">
+          {loading ? "Processing workbook..." : "Drop your sheet here"}
+        </span>
+        <span className="upload-dropzone-line upload-dropzone-subtitle">
+          or select from device
+        </span>
+      </label>
+      <small>{selectedFileName ? `Selected: ${selectedFileName}` : "No workbook selected"}</small>
     </section>
   );
 }
