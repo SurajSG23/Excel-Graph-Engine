@@ -231,6 +231,18 @@ body {
   gap: 0.3rem;
 }
 
+.topbar .toggle-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.topbar .toggle-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
 .topbar input,
 .topbar select,
 button,

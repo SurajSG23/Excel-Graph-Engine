@@ -27,6 +27,7 @@ export function GraphCanvas() {
   const selectedNodeId = useWorkbookStore((s) => s.selectedNodeId);
   const selectedSheet = useWorkbookStore((s) => s.selectedSheet);
   const searchText = useWorkbookStore((s) => s.searchText);
+  const showZeroDependencyNodes = useWorkbookStore((s) => s.showZeroDependencyNodes);
   const setSelectedNode = useWorkbookStore((s) => s.setSelectedNode);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -43,7 +44,7 @@ export function GraphCanvas() {
         : workbook.nodes.filter((node) => node.sheet === selectedSheet);
 
     const query = searchText.trim().toLowerCase();
-    const visibleNodes = query
+    const queryFilteredNodes = query
       ? sheetNodes.filter(
           (node) =>
             node.id.toLowerCase().includes(query) ||
@@ -52,13 +53,17 @@ export function GraphCanvas() {
         )
       : sheetNodes;
 
+    const visibleNodes = showZeroDependencyNodes
+      ? queryFilteredNodes
+      : queryFilteredNodes.filter((node) => node.dependencies.length > 0);
+
     const idSet = new Set(visibleNodes.map((n) => n.id));
     const visibleEdges = workbook.edges.filter(
       (edge) => idSet.has(edge.source) && idSet.has(edge.target),
     );
 
     return { nodes: visibleNodes, edges: visibleEdges };
-  }, [searchText, selectedSheet, workbook]);
+  }, [searchText, selectedSheet, showZeroDependencyNodes, workbook]);
 
   const activeNodeId = selectedNodeId;
 
@@ -167,7 +172,7 @@ export function GraphCanvas() {
       return;
     }
 
-    const fitKey = `${selectedSheet}|${searchText}|${filtered.nodes.length}|${filtered.edges.length}`;
+    const fitKey = `${selectedSheet}|${searchText}|${showZeroDependencyNodes}|${filtered.nodes.length}|${filtered.edges.length}`;
     if (fitKey === lastFitKey.current) {
       return;
     }
@@ -187,6 +192,7 @@ export function GraphCanvas() {
     workbook,
     selectedSheet,
     searchText,
+    showZeroDependencyNodes,
     filtered.nodes.length,
     filtered.edges.length,
   ]);

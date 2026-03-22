@@ -8,12 +8,14 @@ interface WorkbookState {
   selectedNodeId: string | null;
   selectedSheet: string | "ALL";
   searchText: string;
+  showZeroDependencyNodes: boolean;
   loading: boolean;
   error: string | null;
   uploadFile: (file: File) => Promise<void>;
   setSelectedNode: (id: string | null) => void;
   setSelectedSheet: (sheet: string | "ALL") => void;
   setSearchText: (value: string) => void;
+  setShowZeroDependencyNodes: (value: boolean) => void;
   applyUpdate: (updates: NodeUpdate[], label?: string) => Promise<void>;
   triggerExport: () => Promise<void>;
 }
@@ -24,6 +26,7 @@ export const useWorkbookStore = create<WorkbookState>((set, get) => ({
   selectedNodeId: null,
   selectedSheet: "ALL",
   searchText: "",
+  showZeroDependencyNodes: true,
   loading: false,
   error: null,
 
@@ -56,6 +59,10 @@ export const useWorkbookStore = create<WorkbookState>((set, get) => ({
 
   setSearchText(value) {
     set({ searchText: value });
+  },
+
+  setShowZeroDependencyNodes(value) {
+    set({ showZeroDependencyNodes: value });
   },
 
   async applyUpdate(updates, label) {

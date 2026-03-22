@@ -4,8 +4,10 @@ export function TopBar() {
   const workbook = useWorkbookStore((s) => s.workbook);
   const selectedSheet = useWorkbookStore((s) => s.selectedSheet);
   const searchText = useWorkbookStore((s) => s.searchText);
+  const showZeroDependencyNodes = useWorkbookStore((s) => s.showZeroDependencyNodes);
   const setSelectedSheet = useWorkbookStore((s) => s.setSelectedSheet);
   const setSearchText = useWorkbookStore((s) => s.setSearchText);
+  const setShowZeroDependencyNodes = useWorkbookStore((s) => s.setShowZeroDependencyNodes);
   const triggerExport = useWorkbookStore((s) => s.triggerExport);
 
   return (
@@ -32,6 +34,15 @@ export function TopBar() {
               placeholder="Node, cell, formula"
               onChange={(e) => setSearchText(e.target.value)}
             />
+          </label>
+
+          <label className="toggle-row">
+            <input
+              type="checkbox"
+              checked={showZeroDependencyNodes}
+              onChange={(e) => setShowZeroDependencyNodes(e.target.checked)}
+            />
+            Show 0-dependency nodes
           </label>
         </div>
 
