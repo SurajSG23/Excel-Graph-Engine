@@ -2,6 +2,7 @@ import { Handle, Node, NodeProps, Position } from "@xyflow/react";
 import { FlowCellData } from "../utils/graphLayout";
 
 type CellFlowNode = Node<FlowCellData, "cellNode">;
+const HANDLE_POSITIONS = [24, 40, 56, 72];
 
 function formatValue(value: string | number | boolean | undefined): string {
   if (value === undefined) {
@@ -49,7 +50,16 @@ export function CellNode({ data }: NodeProps<CellFlowNode>) {
         ["--role-color" as string]: nodeData.roleColor
       }}
     >
-      <Handle type="target" position={Position.Left} className="cell-node-handle" />
+      {HANDLE_POSITIONS.map((top, index) => (
+        <Handle
+          key={`in-${index}`}
+          id={`in-${index}`}
+          type="target"
+          position={Position.Left}
+          className="cell-node-handle"
+          style={{ top: `${top}%`, transform: "translate(-50%, -50%)" }}
+        />
+      ))}
       <header className="cell-node-header">
         <strong>{nodeData.label}</strong>
         {nodeData.showExtra && <span>{nodeData.sheet}</span>}
@@ -72,7 +82,16 @@ export function CellNode({ data }: NodeProps<CellFlowNode>) {
         <p>Dependencies: {nodeData.dependencies.length ? nodeData.dependencies.join(", ") : "None"}</p>
       </div>
 
-      <Handle type="source" position={Position.Right} className="cell-node-handle" />
+      {HANDLE_POSITIONS.map((top, index) => (
+        <Handle
+          key={`out-${index}`}
+          id={`out-${index}`}
+          type="source"
+          position={Position.Right}
+          className="cell-node-handle"
+          style={{ top: `${top}%`, transform: "translate(50%, -50%)" }}
+        />
+      ))}
     </article>
   );
 }

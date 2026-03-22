@@ -20,6 +20,7 @@ const SHEET_PADDING_X = 42;
 const SHEET_PADDING_Y = 56;
 const SHEET_GAP_X = 90;
 const SHEET_GAP_Y = 94;
+const HANDLE_SLOT_COUNT = 4;
 
 export interface FlowCellData {
   [key: string]: unknown;
@@ -329,7 +330,15 @@ export function toFlowEdges(
   selectedNodeId: string | null,
   hoveredNodeId: string | null
 ): Edge[] {
+  const sourceSlotCounter = new Map<string, number>();
+  const targetSlotCounter = new Map<string, number>();
+
   return graphEdges.map((edge) => {
+    const sourceSlot = sourceSlotCounter.get(edge.source) ?? 0;
+    const targetSlot = targetSlotCounter.get(edge.target) ?? 0;
+    sourceSlotCounter.set(edge.source, sourceSlot + 1);
+    targetSlotCounter.set(edge.target, targetSlot + 1);
+
     const active = selectedNodeId
       ? edge.target === selectedNodeId && highlight.has(edge.source)
       : highlight.has(edge.source) && highlight.has(edge.target);
@@ -341,7 +350,7 @@ export function toFlowEdges(
       ? (isCrossSheet ? "#7c3aed" : "#0f766e")
       : (isCrossSheet ? "#b6a9df" : "#9ab3a5");
     const opacity = hasSelection
-      ? (active ? 0.96 : 0.06)
+      ? (active ? 0.96 : 0.02)
       : hasHover
         ? (active ? 0.86 : 0.12)
         : 0.42;
@@ -350,9 +359,11 @@ export function toFlowEdges(
       id: `${edge.source}->${edge.target}`,
       source: edge.source,
       target: edge.target,
-      type: "default",
+      sourceHandle: `out-${sourceSlot % HANDLE_SLOT_COUNT}`,
+      targetHandle: `in-${targetSlot % HANDLE_SLOT_COUNT}`,
+      type: "smoothstep",
       className: isCrossSheet ? "edge-cross-sheet" : "edge-same-sheet",
-      zIndex: active ? 3 : 1,
+      zIndex: 0,
       markerEnd: {
         type: MarkerType.ArrowClosed,
         width: active ? 13 : 10,
@@ -362,6 +373,7 @@ export function toFlowEdges(
       animated: false,
       style: {
         stroke,
+        borderRadius: 16,
         strokeDasharray: isCrossSheet ? (active ? "7 5" : "4 4") : undefined,
         strokeWidth: active ? 2.6 : 1.55,
         strokeLinecap: "round",
