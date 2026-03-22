@@ -330,14 +330,42 @@ export function toFlowEdges(
   selectedNodeId: string | null,
   hoveredNodeId: string | null
 ): Edge[] {
-  const sourceSlotCounter = new Map<string, number>();
-  const targetSlotCounter = new Map<string, number>();
+  const sortedEdges = [...graphEdges].sort((left, right) => {
+    const sourceCompare = left.source.localeCompare(right.source);
+    if (sourceCompare !== 0) {
+      return sourceCompare;
+    }
+    return left.target.localeCompare(right.target);
+  });
 
-  return graphEdges.map((edge) => {
-    const sourceSlot = sourceSlotCounter.get(edge.source) ?? 0;
-    const targetSlot = targetSlotCounter.get(edge.target) ?? 0;
-    sourceSlotCounter.set(edge.source, sourceSlot + 1);
-    targetSlotCounter.set(edge.target, targetSlot + 1);
+  const sourceTargets = new Map<string, string[]>();
+  const targetSources = new Map<string, string[]>();
+
+  for (const edge of sortedEdges) {
+    if (!sourceTargets.has(edge.source)) {
+      sourceTargets.set(edge.source, []);
+    }
+    sourceTargets.get(edge.source)!.push(edge.target);
+
+    if (!targetSources.has(edge.target)) {
+      targetSources.set(edge.target, []);
+    }
+    targetSources.get(edge.target)!.push(edge.source);
+  }
+
+  for (const [source, targets] of sourceTargets) {
+    sourceTargets.set(source, [...new Set(targets)].sort((a, b) => a.localeCompare(b)));
+  }
+
+  for (const [target, sources] of targetSources) {
+    targetSources.set(target, [...new Set(sources)].sort((a, b) => a.localeCompare(b)));
+  }
+
+  return sortedEdges.map((edge) => {
+    const sourceIndex = sourceTargets.get(edge.source)?.indexOf(edge.target) ?? 0;
+    const targetIndex = targetSources.get(edge.target)?.indexOf(edge.source) ?? 0;
+    const sourceSlot = sourceIndex % HANDLE_SLOT_COUNT;
+    const targetSlot = targetIndex % HANDLE_SLOT_COUNT;
 
     const active = selectedNodeId
       ? edge.target === selectedNodeId && highlight.has(edge.source)
@@ -361,7 +389,7 @@ export function toFlowEdges(
       target: edge.target,
       sourceHandle: `out-${sourceSlot % HANDLE_SLOT_COUNT}`,
       targetHandle: `in-${targetSlot % HANDLE_SLOT_COUNT}`,
-      type: "smoothstep",
+      type: "bezier",
       className: isCrossSheet ? "edge-cross-sheet" : "edge-same-sheet",
       zIndex: 0,
       markerEnd: {
@@ -373,7 +401,6 @@ export function toFlowEdges(
       animated: false,
       style: {
         stroke,
-        borderRadius: 16,
         strokeDasharray: isCrossSheet ? (active ? "7 5" : "4 4") : undefined,
         strokeWidth: active ? 2.6 : 1.55,
         strokeLinecap: "round",

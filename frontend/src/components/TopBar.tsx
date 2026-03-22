@@ -42,7 +42,7 @@ export function TopBar() {
               checked={showZeroDependencyNodes}
               onChange={(e) => setShowZeroDependencyNodes(e.target.checked)}
             />
-            Show 0-dependency nodes
+            Show isolated nodes
           </label>
         </div>
 

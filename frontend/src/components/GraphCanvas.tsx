@@ -53,12 +53,23 @@ export function GraphCanvas() {
         )
       : sheetNodes;
 
+    const candidateIdSet = new Set(queryFilteredNodes.map((node) => node.id));
+    const candidateEdges = workbook.edges.filter(
+      (edge) => candidateIdSet.has(edge.source) && candidateIdSet.has(edge.target),
+    );
+
+    const connectedNodeIds = new Set<string>();
+    for (const edge of candidateEdges) {
+      connectedNodeIds.add(edge.source);
+      connectedNodeIds.add(edge.target);
+    }
+
     const visibleNodes = showZeroDependencyNodes
       ? queryFilteredNodes
-      : queryFilteredNodes.filter((node) => node.dependencies.length > 0);
+      : queryFilteredNodes.filter((node) => connectedNodeIds.has(node.id));
 
     const idSet = new Set(visibleNodes.map((n) => n.id));
-    const visibleEdges = workbook.edges.filter(
+    const visibleEdges = candidateEdges.filter(
       (edge) => idSet.has(edge.source) && idSet.has(edge.target),
     );
 
