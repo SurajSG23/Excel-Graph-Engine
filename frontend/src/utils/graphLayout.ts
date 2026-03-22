@@ -391,7 +391,7 @@ export function toFlowEdges(
       targetHandle: `in-${targetSlot % HANDLE_SLOT_COUNT}`,
       type: "bezier",
       className: isCrossSheet ? "edge-cross-sheet" : "edge-same-sheet",
-      zIndex: 0,
+      zIndex: 1,
       markerEnd: {
         type: MarkerType.ArrowClosed,
         width: active ? 13 : 10,

@@ -169,6 +169,13 @@ export function GraphCanvas() {
 
   const [nodes, setNodes] = useState(flowNodes);
   const [edges, setEdges] = useState(flowEdges);
+  const stats = useMemo(
+    () => ({
+      nodeCount: filtered.nodes.length,
+      edgeCount: filtered.edges.length
+    }),
+    [filtered.nodes.length, filtered.edges.length]
+  );
 
   useEffect(() => {
     setNodes(flowNodes);
@@ -267,8 +274,8 @@ export function GraphCanvas() {
             <h4>Stats</h4>
             <div className="graph-help-stats">
               <div>
-                <span>{nodes.length} nodes</span>
-                <span>{edges.length} edges</span>
+                <span>{stats.nodeCount} nodes</span>
+                <span>{stats.edgeCount} edges</span>
               </div>
               <div>
                 <span>{issueSummary.errorCount} errors</span>
