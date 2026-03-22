@@ -330,37 +330,43 @@ export function toFlowEdges(
   hoveredNodeId: string | null
 ): Edge[] {
   return graphEdges.map((edge) => {
-    const active = highlight.has(edge.source) || highlight.has(edge.target);
+    const active = selectedNodeId
+      ? edge.target === selectedNodeId && highlight.has(edge.source)
+      : highlight.has(edge.source) && highlight.has(edge.target);
     const isCrossSheet = nodeSheetMap.get(edge.source) !== nodeSheetMap.get(edge.target);
     const hasSelection = Boolean(selectedNodeId);
     const hasHover = Boolean(hoveredNodeId);
 
-    const stroke = active ? (isCrossSheet ? "#6d28d9" : "#4b5563") : (isCrossSheet ? "#a78bfa" : "#94a3b8");
+    const stroke = active
+      ? (isCrossSheet ? "#7c3aed" : "#0f766e")
+      : (isCrossSheet ? "#b6a9df" : "#9ab3a5");
     const opacity = hasSelection
-      ? (active ? 0.92 : 0.12)
+      ? (active ? 0.96 : 0.06)
       : hasHover
-        ? (active ? 0.78 : 0.14)
-        : 0.28;
+        ? (active ? 0.86 : 0.12)
+        : 0.42;
 
     return {
       id: `${edge.source}->${edge.target}`,
       source: edge.source,
       target: edge.target,
-      type: "smoothstep",
+      type: "default",
       className: isCrossSheet ? "edge-cross-sheet" : "edge-same-sheet",
+      zIndex: active ? 3 : 1,
       markerEnd: {
         type: MarkerType.ArrowClosed,
-        width: 12,
-        height: 12,
+        width: active ? 13 : 10,
+        height: active ? 13 : 10,
         color: stroke
       },
-      animated: active && (hasSelection || hasHover),
+      animated: false,
       style: {
         stroke,
-        strokeDasharray: isCrossSheet ? "5 4" : undefined,
-        strokeWidth: active ? 1.8 : 1.1,
+        strokeDasharray: isCrossSheet ? (active ? "7 5" : "4 4") : undefined,
+        strokeWidth: active ? 2.6 : 1.55,
+        strokeLinecap: "round",
         opacity,
-        transition: "opacity 160ms ease, stroke 160ms ease"
+        transition: "opacity 180ms ease, stroke 180ms ease, stroke-width 180ms ease"
       }
     } satisfies Edge;
   });

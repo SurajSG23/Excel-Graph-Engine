@@ -64,18 +64,19 @@ export function GraphCanvas() {
 
   const highlight = useMemo(() => {
     if (!activeNodeId || !workbook) return new Set<string>();
-    const { upstream, downstream } = buildTraversalSets(
-      activeNodeId,
-      workbook.edges,
-    );
-    return new Set<string>([activeNodeId, ...upstream, ...downstream]);
+    const selectedNode = workbook.nodes.find((node) => node.id === activeNodeId);
+    return new Set<string>([activeNodeId, ...(selectedNode?.dependencies ?? [])]);
   }, [activeNodeId, workbook]);
 
   const traversal = useMemo(() => {
     if (!activeNodeId || !workbook) {
       return { upstream: new Set<string>(), downstream: new Set<string>() };
     }
-    return buildTraversalSets(activeNodeId, workbook.edges);
+    const selectedNode = workbook.nodes.find((node) => node.id === activeNodeId);
+    return {
+      upstream: new Set(selectedNode?.dependencies ?? []),
+      downstream: new Set<string>()
+    };
   }, [activeNodeId, workbook]);
 
   const issueSummary = useMemo(() => {

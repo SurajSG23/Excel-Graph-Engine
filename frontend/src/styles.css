@@ -416,7 +416,16 @@ button:hover {
 }
 
 .react-flow__edge.edge-cross-sheet .react-flow__edge-path {
-  filter: drop-shadow(0 0 2px rgba(139, 92, 246, 0.2));
+  filter: drop-shadow(0 0 2px rgba(124, 58, 237, 0.2));
+}
+
+.react-flow__edge .react-flow__edge-path {
+  stroke-linecap: round;
+}
+
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:hover .react-flow__edge-path {
+  filter: drop-shadow(0 0 2px rgba(15, 118, 110, 0.22));
 }
 
 .sheet-group-node {
