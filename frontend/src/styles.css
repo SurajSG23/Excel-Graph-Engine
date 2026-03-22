@@ -231,18 +231,6 @@ body {
   gap: 0.3rem;
 }
 
-.topbar .toggle-row {
-  flex-direction: row;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8rem;
-}
-
-.topbar .toggle-row input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-}
-
 .topbar input,
 .topbar select,
 button,
@@ -258,6 +246,64 @@ textarea {
 .topbar button,
 .formula-form textarea {
   width: 100%;
+}
+
+.topbar .toggle-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid #cfe2d6;
+  border-radius: 12px;
+  background: #f8fcf9;
+  cursor: pointer;
+  user-select: none;
+}
+
+.topbar .toggle-input {
+  appearance: none;
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid #99b9a8;
+  background: #e5efe9;
+  position: relative;
+  margin: 0;
+  padding: 0;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.topbar .toggle-input::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
+  transition: transform 160ms ease;
+}
+
+.topbar .toggle-input:checked {
+  background: #16a34a;
+  border-color: #15803d;
+}
+
+.topbar .toggle-input:checked::after {
+  transform: translateX(16px);
+}
+
+.topbar .toggle-input:focus-visible {
+  outline: 2px solid #14532d;
+  outline-offset: 2px;
+}
+
+.topbar .toggle-text {
+  font-size: 0.8rem;
+  color: #1f2937;
 }
 
 button {
@@ -428,16 +474,7 @@ button:hover {
 }
 
 .react-flow__edge.edge-cross-sheet .react-flow__edge-path {
-  filter: drop-shadow(0 0 2px rgba(124, 58, 237, 0.2));
-}
-
-.react-flow__edge .react-flow__edge-path {
-  stroke-linecap: round;
-}
-
-.react-flow__edge.selected .react-flow__edge-path,
-.react-flow__edge:hover .react-flow__edge-path {
-  filter: drop-shadow(0 0 2px rgba(15, 118, 110, 0.22));
+  filter: drop-shadow(0 0 2px rgba(139, 92, 246, 0.2));
 }
 
 .sheet-group-node {
