@@ -4,6 +4,8 @@ import { WorkbookGraph } from "../models/graph";
 interface WorkbookSession {
   workbook: WorkbookGraph;
   versions: Array<{ version: number; timestamp: string; label: string }>;
+  undoStack: WorkbookGraph[];
+  redoStack: WorkbookGraph[];
 }
 
 export class WorkbookSessionService {
@@ -19,7 +21,9 @@ export class WorkbookSessionService {
 
     this.sessions.set(workbookId, {
       workbook: sessionWorkbook,
-      versions: [{ version: 1, timestamp: new Date().toISOString(), label: "Initial upload" }]
+      versions: [{ version: 1, timestamp: new Date().toISOString(), label: "Initial upload" }],
+      undoStack: [],
+      redoStack: []
     });
 
     return sessionWorkbook;
@@ -46,6 +50,8 @@ export class WorkbookSessionService {
       version
     };
 
+    session.undoStack.push(session.workbook);
+    session.redoStack = [];
     session.workbook = updated;
     session.versions.push({
       version,
@@ -59,5 +65,61 @@ export class WorkbookSessionService {
 
   getVersions(workbookId: string): Array<{ version: number; timestamp: string; label: string }> {
     return this.sessions.get(workbookId)?.versions ?? [];
+  }
+
+  undo(workbookId: string): WorkbookGraph {
+    const session = this.sessions.get(workbookId);
+    if (!session) {
+      throw new Error("Workbook session not found.");
+    }
+
+    const previous = session.undoStack.pop();
+    if (!previous) {
+      throw new Error("Nothing to undo.");
+    }
+
+    session.redoStack.push(session.workbook);
+    session.workbook = {
+      ...previous,
+      workbookId,
+      version: session.workbook.version + 1
+    };
+
+    session.versions.push({
+      version: session.workbook.version,
+      timestamp: new Date().toISOString(),
+      label: "Undo"
+    });
+
+    this.sessions.set(workbookId, session);
+    return session.workbook;
+  }
+
+  redo(workbookId: string): WorkbookGraph {
+    const session = this.sessions.get(workbookId);
+    if (!session) {
+      throw new Error("Workbook session not found.");
+    }
+
+    const next = session.redoStack.pop();
+    if (!next) {
+      throw new Error("Nothing to redo.");
+    }
+
+    session.undoStack.push(session.workbook);
+    session.workbook = {
+      ...next,
+      workbookId,
+      version: session.workbook.version + 1
+    };
+
+    session.versions.push({
+      version: session.workbook.version,
+      timestamp: new Date().toISOString(),
+      label: "Redo"
+    });
+
+    this.sessions.set(workbookId, session);
+    return session.workbook;
   }
 }

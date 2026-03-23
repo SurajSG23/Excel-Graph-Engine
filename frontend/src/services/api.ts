@@ -1,5 +1,5 @@
 import axios from "axios";
-import { NodeUpdate, WorkbookResponse } from "../types/workbook";
+import { NodeUpdate, WorkbookOperation, WorkbookResponse } from "../types/workbook";
 
 const api = axios.create({
   baseURL: "/api"
@@ -55,4 +55,27 @@ export async function recomputeWorkbook(workbookId: string, updates: NodeUpdate[
 export async function exportWorkbook(workbookId: string): Promise<Blob> {
   const { data } = await api.post("/export", { workbookId }, { responseType: "blob" });
   return data as Blob;
+}
+
+export async function applyWorkbookOperations(
+  workbookId: string,
+  operations: WorkbookOperation[],
+  label?: string
+): Promise<WorkbookResponse> {
+  const { data } = await api.post<WorkbookResponse>("/operations", {
+    workbookId,
+    operations,
+    label
+  });
+  return data;
+}
+
+export async function undoWorkbook(workbookId: string): Promise<WorkbookResponse> {
+  const { data } = await api.post<WorkbookResponse>("/undo", { workbookId });
+  return data;
+}
+
+export async function redoWorkbook(workbookId: string): Promise<WorkbookResponse> {
+  const { data } = await api.post<WorkbookResponse>("/redo", { workbookId });
+  return data;
 }

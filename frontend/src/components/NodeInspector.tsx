@@ -17,6 +17,7 @@ export function NodeInspector() {
   const workbook = useWorkbookStore((s) => s.workbook);
   const selectedNodeId = useWorkbookStore((s) => s.selectedNodeId);
   const applyUpdate = useWorkbookStore((s) => s.applyUpdate);
+  const applyOperations = useWorkbookStore((s) => s.applyOperations);
 
   const node = useMemo(
     () => workbook?.nodes.find((item) => item.id === selectedNodeId),
@@ -24,9 +25,15 @@ export function NodeInspector() {
   );
 
   const [formula, setFormula] = useState("");
+  const [newCellAddress, setNewCellAddress] = useState("A1");
+  const [newCellFormula, setNewCellFormula] = useState("");
+  const [newCellValue, setNewCellValue] = useState("");
+  const [moveTarget, setMoveTarget] = useState("");
+  const [pasteTarget, setPasteTarget] = useState("A1");
 
   useEffect(() => {
     setFormula(node?.formula ?? "");
+    setMoveTarget(node?.cell ?? "");
   }, [node]);
 
   const onSubmit = async (event: FormEvent): Promise<void> => {
@@ -84,6 +91,108 @@ export function NodeInspector() {
           />
           <button type="submit">Apply + Recompute</button>
         </form>
+
+        <form
+          className="formula-form"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            await applyOperations(
+              [
+                {
+                  type: "ADD_CELL",
+                  fileName: node.fileName,
+                  sheet: node.sheet,
+                  cell: newCellAddress,
+                  formula: newCellFormula || undefined,
+                  value: newCellValue ? Number(newCellValue) || newCellValue : undefined,
+                  fileRole: node.fileRole
+                }
+              ],
+              `Add ${node.fileName}::${node.sheet}::${newCellAddress}`
+            );
+          }}
+        >
+          <label htmlFor="new-cell-address">Add Cell Address</label>
+          <input
+            id="new-cell-address"
+            value={newCellAddress}
+            onChange={(e) => setNewCellAddress(e.target.value)}
+            placeholder="A11"
+          />
+          <label htmlFor="new-cell-formula">Formula (optional)</label>
+          <input
+            id="new-cell-formula"
+            value={newCellFormula}
+            onChange={(e) => setNewCellFormula(e.target.value)}
+            placeholder="=A1+B1"
+          />
+          <label htmlFor="new-cell-value">Value (optional)</label>
+          <input
+            id="new-cell-value"
+            value={newCellValue}
+            onChange={(e) => setNewCellValue(e.target.value)}
+            placeholder="42"
+          />
+          <button type="submit">Add Cell</button>
+        </form>
+
+        <div className="toolbar-group">
+          <label>
+            Move Selected Cell To
+            <input value={moveTarget} onChange={(e) => setMoveTarget(e.target.value)} placeholder="B5" />
+          </label>
+          <button
+            type="button"
+            onClick={() =>
+              applyOperations(
+                [
+                  {
+                    type: "MOVE_CELL",
+                    fromNodeId: node.id,
+                    toFileName: node.fileName,
+                    toSheet: node.sheet,
+                    toCell: moveTarget
+                  }
+                ],
+                `Move ${node.id}`
+              )
+            }
+          >
+            Move Cell
+          </button>
+          <button
+            type="button"
+            onClick={() => applyOperations([{ type: "DELETE_CELLS", nodeIds: [node.id] }], `Delete ${node.id}`)}
+          >
+            Delete Cell
+          </button>
+        </div>
+
+        <div className="toolbar-group">
+          <label>
+            Paste Anchor
+            <input value={pasteTarget} onChange={(e) => setPasteTarget(e.target.value)} placeholder="D10" />
+          </label>
+          <button
+            type="button"
+            onClick={() =>
+              applyOperations(
+                [
+                  {
+                    type: "COPY_PASTE",
+                    sourceNodeIds: [node.id],
+                    targetFileName: node.fileName,
+                    targetSheet: node.sheet,
+                    targetAnchorCell: pasteTarget
+                  }
+                ],
+                `Copy ${node.id}`
+              )
+            }
+          >
+            Copy/Paste Node
+          </button>
+        </div>
       </details>
     </section>
   );

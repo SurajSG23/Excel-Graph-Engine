@@ -6,9 +6,10 @@ import {
   fileRegistryService,
   graphBuilderService,
   validationService,
+  workbookMutationService,
   workbookSessionService
 } from "../services/serviceContainer";
-import { NodeUpdate, ParsedWorkbook, WorkbookRole } from "../models/graph";
+import { NodeUpdate, ParsedWorkbook, WorkbookOperation, WorkbookRole } from "../models/graph";
 
 interface UploadItem {
   path: string;
@@ -218,6 +219,101 @@ export class WorkbookController {
     } catch (error) {
       res.status(500).json({
         message: "Failed to recompute workbook.",
+        detail: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  }
+
+  applyOperations(req: Request, res: Response): void {
+    try {
+      const { workbookId, operations, label } = req.body as {
+        workbookId?: string;
+        operations?: WorkbookOperation[];
+        label?: string;
+      };
+
+      if (!workbookId) {
+        res.status(400).json({ message: "workbookId is required." });
+        return;
+      }
+
+      if (!Array.isArray(operations) || operations.length === 0) {
+        res.status(400).json({ message: "operations array is required." });
+        return;
+      }
+
+      const session = workbookSessionService.getSession(workbookId);
+      if (!session) {
+        res.status(404).json({ message: "Workbook not found." });
+        return;
+      }
+
+      const mutated = workbookMutationService.applyOperations(session.workbook, operations);
+      const rebuilt = graphBuilderService.rebuildFromNodes(mutated.nodes, mutated.files);
+      const validationIssues = validationService.validate(rebuilt.nodes, rebuilt.files);
+      const computed = executionEngineService.recompute(rebuilt.nodes, mutated.changedNodeIds);
+
+      const updatedWorkbook = workbookSessionService.updateWorkbook(
+        workbookId,
+        {
+          workbookId,
+          ...rebuilt,
+          outputFileName: session.workbook.outputFileName,
+          validationIssues: [...validationIssues, ...computed.issues],
+          nodes: computed.nodes
+        },
+        label || "Spreadsheet operation"
+      );
+
+      res.status(200).json({
+        workbook: updatedWorkbook,
+        versions: workbookSessionService.getVersions(workbookId)
+      });
+    } catch (error) {
+      res.status(500).json({
+        message: "Failed to apply operations.",
+        detail: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  }
+
+  undo(req: Request, res: Response): void {
+    try {
+      const { workbookId } = req.body as { workbookId?: string };
+      if (!workbookId) {
+        res.status(400).json({ message: "workbookId is required." });
+        return;
+      }
+
+      const workbook = workbookSessionService.undo(workbookId);
+      res.status(200).json({
+        workbook,
+        versions: workbookSessionService.getVersions(workbookId)
+      });
+    } catch (error) {
+      res.status(400).json({
+        message: "Undo failed.",
+        detail: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  }
+
+  redo(req: Request, res: Response): void {
+    try {
+      const { workbookId } = req.body as { workbookId?: string };
+      if (!workbookId) {
+        res.status(400).json({ message: "workbookId is required." });
+        return;
+      }
+
+      const workbook = workbookSessionService.redo(workbookId);
+      res.status(200).json({
+        workbook,
+        versions: workbookSessionService.getVersions(workbookId)
+      });
+    } catch (error) {
+      res.status(400).json({
+        message: "Redo failed.",
         detail: error instanceof Error ? error.message : "Unknown error"
       });
     }

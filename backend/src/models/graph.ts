@@ -72,3 +72,82 @@ export interface ParsedWorkbook {
   sheets: string[];
   cells: ParsedCell[];
 }
+
+export type WorkbookOperation =
+  | {
+      type: "ADD_CELL";
+      fileName: string;
+      sheet: string;
+      cell: string;
+      value?: CellValue;
+      formula?: string;
+      fileRole?: WorkbookRole;
+    }
+  | {
+      type: "DELETE_CELLS";
+      nodeIds: string[];
+    }
+  | {
+      type: "MOVE_CELL";
+      fromNodeId: string;
+      toFileName: string;
+      toSheet: string;
+      toCell: string;
+    }
+  | {
+      type: "INSERT_ROW";
+      fileName: string;
+      sheet: string;
+      index: number;
+      count?: number;
+    }
+  | {
+      type: "DELETE_ROW";
+      fileName: string;
+      sheet: string;
+      index: number;
+      count?: number;
+    }
+  | {
+      type: "INSERT_COLUMN";
+      fileName: string;
+      sheet: string;
+      index: number;
+      count?: number;
+    }
+  | {
+      type: "DELETE_COLUMN";
+      fileName: string;
+      sheet: string;
+      index: number;
+      count?: number;
+    }
+  | {
+      type: "ADD_SHEET";
+      fileName: string;
+      sheet: string;
+    }
+  | {
+      type: "DELETE_SHEET";
+      fileName: string;
+      sheet: string;
+    }
+  | {
+      type: "RENAME_SHEET";
+      fileName: string;
+      fromSheet: string;
+      toSheet: string;
+    }
+  | {
+      type: "COPY_PASTE";
+      sourceNodeIds: string[];
+      targetFileName: string;
+      targetSheet: string;
+      targetAnchorCell: string;
+    };
+
+export interface SpreadsheetMutationResult {
+  nodes: GraphNode[];
+  files: WorkbookGraph["files"];
+  changedNodeIds: string[];
+}
