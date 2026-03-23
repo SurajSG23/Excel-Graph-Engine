@@ -189,7 +189,7 @@ body {
 
 .upload-dropzone {
   margin-top: 0.8rem;
-  width: 90%;
+  width: 100%;
   min-height: 58px;
   display: grid;
   place-content: center;
@@ -203,6 +203,19 @@ body {
   transition: border-color 140ms ease, background-color 140ms ease;
   position: relative;
   overflow: hidden;
+}
+
+.upload-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.55rem;
+}
+
+.upload-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.45rem;
+  margin-top: 0.4rem;
 }
 
 .upload-dropzone:hover {

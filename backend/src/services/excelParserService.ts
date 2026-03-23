@@ -1,10 +1,12 @@
 import * as XLSX from "xlsx";
-import { ParsedCell } from "../models/graph";
+import { ParsedWorkbook, WorkbookRole } from "../models/graph";
+import { normalizeFileName } from "../utils/cellUtils";
 
 export class ExcelParserService {
-  parseWorkbook(filePath: string): { sheets: string[]; cells: ParsedCell[] } {
+  parseWorkbook(filePath: string, uploadName: string, fileRole: WorkbookRole): ParsedWorkbook {
     const workbook = XLSX.readFile(filePath, { cellFormula: true, cellNF: false, cellText: false });
-    const cells: ParsedCell[] = [];
+    const fileName = normalizeFileName(uploadName);
+    const cells = [] as ParsedWorkbook["cells"];
 
     for (const sheetName of workbook.SheetNames) {
       const sheet = workbook.Sheets[sheetName];
@@ -30,6 +32,8 @@ export class ExcelParserService {
         const formula = cell.f ? `=${cell.f}` : undefined;
 
         cells.push({
+          fileName,
+          fileRole,
           sheet: sheetName,
           cell: key,
           formula,
@@ -39,6 +43,9 @@ export class ExcelParserService {
     }
 
     return {
+      fileName,
+      fileRole,
+      uploadName,
       sheets: workbook.SheetNames,
       cells
     };

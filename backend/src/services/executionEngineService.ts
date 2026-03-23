@@ -1,5 +1,6 @@
 import * as formulajs from "formulajs";
 import { GraphNode, ValidationIssue } from "../models/graph";
+import { normalizeCellAddress, normalizeFileName, normalizeSheetName, toNodeId } from "../utils/cellUtils";
 
 interface RecomputeResult {
   nodes: GraphNode[];
@@ -7,6 +8,55 @@ interface RecomputeResult {
 }
 
 export class ExecutionEngineService {
+  private resolveExternalFileToken(
+    fileToken: string,
+    currentFileName: string,
+    nodeMap: Map<string, GraphNode>
+  ): string {
+    if (!/^\d+$/.test(fileToken)) {
+      return fileToken;
+    }
+
+    const fileRoleMap = new Map<string, GraphNode["fileRole"]>();
+    for (const node of nodeMap.values()) {
+      if (!fileRoleMap.has(node.fileName)) {
+        fileRoleMap.set(node.fileName, node.fileRole);
+      }
+    }
+
+    const candidates = [...fileRoleMap.entries()]
+      .filter(([fileName]) => fileName !== currentFileName)
+      .sort((left, right) => {
+        const rank = (role: GraphNode["fileRole"]): number => {
+          if (role === "input") return 0;
+          if (role === "output") return 1;
+          return 2;
+        };
+
+        const byRole = rank(left[1]) - rank(right[1]);
+        if (byRole !== 0) {
+          return byRole;
+        }
+
+        return left[0].localeCompare(right[0]);
+      });
+
+    if (candidates.length === 0) {
+      return fileToken;
+    }
+
+    const index = Number(fileToken) - 1;
+    if (index >= 0 && index < candidates.length) {
+      return candidates[index][0];
+    }
+
+    if (candidates.length === 1) {
+      return candidates[0][0];
+    }
+
+    return fileToken;
+  }
+
   recompute(nodes: GraphNode[], changedNodeIds: string[] = []): RecomputeResult {
     const nodeMap = new Map(nodes.map((node) => [node.id, { ...node }]));
     const nodeIds = new Set(nodeMap.keys());
@@ -37,7 +87,7 @@ export class ExecutionEngineService {
         continue;
       }
 
-      const result = this.evaluateFormula(node.formula, node.sheet, nodeMap);
+      const result = this.evaluateFormula(node.formula, node.fileName, node.sheet, nodeMap);
       if (result.error) {
         issues.push({
           type: "INVALID_FORMULA",
@@ -125,11 +175,12 @@ export class ExecutionEngineService {
 
   private evaluateFormula(
     formula: string,
+    currentFileName: string,
     currentSheet: string,
     nodeMap: Map<string, GraphNode>
   ): { value: GraphNode["value"] | undefined; error?: string } {
     try {
-      const expression = this.transformFormulaToJs(formula, currentSheet, nodeMap);
+      const expression = this.transformFormulaToJs(formula, currentFileName, currentSheet, nodeMap);
       const helpers = {
         fn: (name: string) => {
           const upper = name.toUpperCase();
@@ -169,25 +220,40 @@ export class ExecutionEngineService {
     }
   }
 
-  private transformFormulaToJs(formula: string, currentSheet: string, nodeMap: Map<string, GraphNode>): string {
+  private transformFormulaToJs(
+    formula: string,
+    currentFileName: string,
+    currentSheet: string,
+    nodeMap: Map<string, GraphNode>
+  ): string {
     let body = formula.startsWith("=") ? formula.slice(1) : formula;
 
-    const rangeRegex = /((?:'[^']+'|[A-Za-z0-9_]+)!\$?[A-Z]{1,3}\$?[0-9]+|\$?[A-Z]{1,3}\$?[0-9]+):((?:'[^']+'|[A-Za-z0-9_]+)!\$?[A-Z]{1,3}\$?[0-9]+|\$?[A-Z]{1,3}\$?[0-9]+)/g;
+    const rangeRegex = /((?:'[^']+'|\[[^\]]+\][^!]+|[A-Za-z0-9_\.]+)!\$?[A-Z]{1,3}\$?[0-9]+|\$?[A-Z]{1,3}\$?[0-9]+):((?:'[^']+'|\[[^\]]+\][^!]+|[A-Za-z0-9_\.]+)!\$?[A-Z]{1,3}\$?[0-9]+|\$?[A-Z]{1,3}\$?[0-9]+)/g;
     body = body.replace(rangeRegex, (_m, left, right) => {
-      const leftParsed = this.parseRef(left, currentSheet);
-      const rightParsed = this.parseRef(right, currentSheet);
-      const cells = this.expandRangeForEvaluation(leftParsed.sheet, leftParsed.cell, rightParsed.sheet, rightParsed.cell);
+      const leftParsed = this.parseRef(left, currentFileName, currentSheet, nodeMap);
+      const rightParsed = this.parseRef(right, currentFileName, currentSheet, nodeMap);
+      const cells = this.expandRangeForEvaluation(
+        leftParsed.file,
+        leftParsed.sheet,
+        leftParsed.cell,
+        rightParsed.file,
+        rightParsed.sheet,
+        rightParsed.cell
+      );
       const values = cells.map((id) => this.getNodeNumericValue(id, nodeMap));
       return `[${values.join(",")}]`;
     });
 
-    const referenceRegex = /(?:'[^']+'|[A-Za-z0-9_]+)!\$?[A-Z]{1,3}\$?[0-9]+|\$?[A-Z]{1,3}\$?[0-9]+/g;
+    const referenceRegex = /(?:'[^']+'|\[[^\]]+\][^!]+|[A-Za-z0-9_\.]+)!\$?[A-Z]{1,3}\$?[0-9]+|\$?[A-Z]{1,3}\$?[0-9]+/g;
     body = body.replace(referenceRegex, (token) => {
-      const parsed = this.parseRef(token, currentSheet);
-      const id = `${parsed.sheet}!${parsed.cell}`;
+      const parsed = this.parseRef(token, currentFileName, currentSheet, nodeMap);
+      const id = toNodeId(parsed.file, parsed.sheet, parsed.cell);
       const value = this.getNodeNumericValue(id, nodeMap);
       return String(value);
     });
+
+    // Avoid JS parse failures for Excel error literals that may appear in formulas.
+    body = body.replace(/#(REF!|N\/A|DIV\/0!|VALUE!|NAME\?|NUM!|NULL!)/gi, "0");
 
     body = body.replace(/\^/g, "**");
     body = body.replace(/\b([A-Za-z_][A-Za-z0-9_.]*)\s*\(/g, (_match, name: string) => {
@@ -201,30 +267,45 @@ export class ExecutionEngineService {
     return body;
   }
 
-  private parseRef(ref: string, currentSheet: string): { sheet: string; cell: string } {
-    const cleaned = ref.replace(/\$/g, "").trim();
+  private parseRef(
+    ref: string,
+    currentFileName: string,
+    currentSheet: string,
+    nodeMap: Map<string, GraphNode>
+  ): { file: string; sheet: string; cell: string } {
+    const cleaned = ref.trim();
     if (cleaned.includes("!")) {
-      const [sheet, cell] = cleaned.split("!");
+      const [rawSheet, rawCell] = cleaned.split("!");
+      const sheetToken = rawSheet.replace(/^'|'$/g, "");
+      const external = sheetToken.match(/^(?:.*[\\/])?\[([^\]]+)\](.+)$/);
+      const parsedFile = normalizeFileName(external ? external[1] : currentFileName);
       return {
-        sheet: sheet.replace(/^'|'$/g, ""),
-        cell: cell.toUpperCase()
+        file: this.resolveExternalFileToken(parsedFile, currentFileName, nodeMap),
+        sheet: normalizeSheetName(external ? external[2] : sheetToken),
+        cell: normalizeCellAddress(rawCell)
       };
     }
 
     return {
+      file: normalizeFileName(currentFileName),
       sheet: currentSheet,
-      cell: cleaned.toUpperCase()
+      cell: normalizeCellAddress(cleaned)
     };
   }
 
   private expandRangeForEvaluation(
+    startFile: string,
     startSheet: string,
     startCell: string,
+    endFile: string,
     endSheet: string,
     endCell: string
   ): string[] {
-    if (startSheet !== endSheet) {
-      return [`${startSheet}!${startCell}`, `${endSheet}!${endCell}`];
+    if (startFile !== endFile || startSheet !== endSheet) {
+      return [
+        toNodeId(startFile, startSheet, startCell),
+        toNodeId(endFile, endSheet, endCell)
+      ];
     }
 
     const [startCol, startRow] = this.splitCell(startCell);
@@ -243,7 +324,7 @@ export class ExecutionEngineService {
     const refs: string[] = [];
     for (let col = minCol; col <= maxCol; col += 1) {
       for (let row = minRow; row <= maxRow; row += 1) {
-        refs.push(`${startSheet}!${this.numToCol(col)}${row}`);
+        refs.push(toNodeId(startFile, startSheet, `${this.numToCol(col)}${row}`));
       }
     }
 

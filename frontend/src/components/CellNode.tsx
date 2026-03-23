@@ -77,6 +77,7 @@ export function CellNode({ data }: NodeProps<CellFlowNode>) {
 
       <div className="cell-node-tooltip">
         <p><strong>{nodeData.id}</strong></p>
+        <p>File: {nodeData.fileName}</p>
         <p>Value: {formatValue(nodeData.value) || "available"}</p>
         <p>Formula: {nodeData.formula ?? "(none)"}</p>
         <p>Dependencies: {nodeData.dependencies.length ? nodeData.dependencies.join(", ") : "None"}</p>

@@ -25,6 +25,7 @@ const nodeTypes = {
 export function GraphCanvas() {
   const workbook = useWorkbookStore((s) => s.workbook);
   const selectedNodeId = useWorkbookStore((s) => s.selectedNodeId);
+  const selectedFile = useWorkbookStore((s) => s.selectedFile);
   const selectedSheet = useWorkbookStore((s) => s.selectedSheet);
   const searchText = useWorkbookStore((s) => s.searchText);
   const showZeroDependencyNodes = useWorkbookStore((s) => s.showZeroDependencyNodes);
@@ -38,10 +39,15 @@ export function GraphCanvas() {
   const filtered = useMemo(() => {
     if (!workbook) return { nodes: [], edges: [] };
 
+    const byFile =
+      selectedFile === "ALL"
+        ? workbook.nodes
+        : workbook.nodes.filter((node) => node.fileName === selectedFile);
+
     const sheetNodes =
       selectedSheet === "ALL"
-        ? workbook.nodes
-        : workbook.nodes.filter((node) => node.sheet === selectedSheet);
+        ? byFile
+        : byFile.filter((node) => `${node.fileName}::${node.sheet}` === selectedSheet);
 
     const query = searchText.trim().toLowerCase();
     const queryFilteredNodes = query
@@ -74,7 +80,7 @@ export function GraphCanvas() {
     );
 
     return { nodes: visibleNodes, edges: visibleEdges };
-  }, [searchText, selectedSheet, showZeroDependencyNodes, workbook]);
+  }, [searchText, selectedFile, selectedSheet, showZeroDependencyNodes, workbook]);
 
   const activeNodeId = selectedNodeId;
 
@@ -88,11 +94,7 @@ export function GraphCanvas() {
     if (!activeNodeId || !workbook) {
       return { upstream: new Set<string>(), downstream: new Set<string>() };
     }
-    const selectedNode = workbook.nodes.find((node) => node.id === activeNodeId);
-    return {
-      upstream: new Set(selectedNode?.dependencies ?? []),
-      downstream: new Set<string>()
-    };
+    return buildTraversalSets(activeNodeId, workbook.edges);
   }, [activeNodeId, workbook]);
 
   const issueSummary = useMemo(() => {
@@ -124,8 +126,8 @@ export function GraphCanvas() {
     };
   }, [workbook]);
 
-  const nodeSheetMap = useMemo(
-    () => new Map((workbook?.nodes ?? []).map((node) => [node.id, node.sheet])),
+  const nodeFileMap = useMemo(
+    () => new Map((workbook?.nodes ?? []).map((node) => [node.id, node.fileName])),
     [workbook],
   );
 
@@ -138,6 +140,7 @@ export function GraphCanvas() {
         downstream: traversal.downstream,
         errorNodeIds: issueSummary.errorNodeIds,
         circularNodeIds: issueSummary.circularNodeIds,
+        selectedFile,
         selectedSheet,
         zoomLevel,
       }),
@@ -150,6 +153,7 @@ export function GraphCanvas() {
       traversal.downstream,
       issueSummary.errorNodeIds,
       issueSummary.circularNodeIds,
+      selectedFile,
       selectedSheet,
       zoomLevel,
     ],
@@ -160,11 +164,11 @@ export function GraphCanvas() {
       toFlowEdges(
         filtered.edges,
         highlight,
-        nodeSheetMap,
+        nodeFileMap,
         selectedNodeId,
         hoveredNodeId,
       ),
-    [filtered.edges, highlight, nodeSheetMap, selectedNodeId, hoveredNodeId],
+    [filtered.edges, highlight, nodeFileMap, selectedNodeId, hoveredNodeId],
   );
 
   const [nodes, setNodes] = useState(flowNodes);
@@ -190,7 +194,7 @@ export function GraphCanvas() {
       return;
     }
 
-    const fitKey = `${selectedSheet}|${searchText}|${showZeroDependencyNodes}|${filtered.nodes.length}|${filtered.edges.length}`;
+    const fitKey = `${selectedFile}|${selectedSheet}|${searchText}|${showZeroDependencyNodes}|${filtered.nodes.length}|${filtered.edges.length}`;
     if (fitKey === lastFitKey.current) {
       return;
     }
@@ -208,6 +212,7 @@ export function GraphCanvas() {
   }, [
     reactFlowInstance,
     workbook,
+    selectedFile,
     selectedSheet,
     searchText,
     showZeroDependencyNodes,
@@ -301,10 +306,10 @@ export function GraphCanvas() {
                 <i className="legend-dot error" /> Error/Cycle
               </li>
               <li>
-                <i className="legend-line same" /> Same-sheet
+                <i className="legend-line same" /> Same-file
               </li>
               <li>
-                <i className="legend-line cross" /> Cross-sheet
+                <i className="legend-line cross" /> Cross-file
               </li>
             </ul>
           </div>

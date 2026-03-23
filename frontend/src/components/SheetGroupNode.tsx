@@ -8,6 +8,7 @@ export function SheetGroupNode({ data }: NodeProps<SheetGroupFlowNode>) {
     <div className="sheet-group-node" style={{ ["--sheet-color" as string]: data.color }}>
       <div className="sheet-group-chip">
         <strong>{data.sheet}</strong>
+        <span>{data.fileName}</span>
         <span>{data.nodeCount} nodes</span>
       </div>
     </div>

@@ -3,11 +3,13 @@ import path from "node:path";
 import { GraphNode } from "../models/graph";
 
 export class ExportService {
-  exportWorkbook(nodes: GraphNode[], sheets: string[], workbookId: string): string {
+  exportWorkbook(nodes: GraphNode[], workbookId: string, outputFileName: string): string {
     const workbook = XLSX.utils.book_new();
+    const outputNodes = nodes.filter((node) => node.fileName === outputFileName);
+    const outputSheets = [...new Set(outputNodes.map((node) => node.sheet))];
 
-    for (const sheetName of sheets) {
-      const sheetNodes = nodes.filter((node) => node.sheet === sheetName);
+    for (const sheetName of outputSheets) {
+      const sheetNodes = outputNodes.filter((node) => node.sheet === sheetName);
       const ws: XLSX.WorkSheet = {};
 
       for (const node of sheetNodes) {

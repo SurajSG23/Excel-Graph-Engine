@@ -3,31 +3,138 @@ import {
   excelParserService,
   executionEngineService,
   exportService,
+  fileRegistryService,
   graphBuilderService,
   validationService,
   workbookSessionService
 } from "../services/serviceContainer";
-import { NodeUpdate } from "../models/graph";
+import { NodeUpdate, ParsedWorkbook, WorkbookRole } from "../models/graph";
+
+interface UploadItem {
+  path: string;
+  originalname: string;
+  role: WorkbookRole;
+}
+
+function toRole(value: unknown): WorkbookRole | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "input" || normalized === "output") {
+    return normalized;
+  }
+  return null;
+}
+
+function collectUploads(req: Request): UploadItem[] {
+  const files = (req.files as Record<string, Express.Multer.File[]>) ?? {};
+  const entries: UploadItem[] = [];
+
+  for (const item of files.input ?? []) {
+    entries.push({
+      path: item.path,
+      originalname: item.originalname,
+      role: "input"
+    });
+  }
+
+  for (const item of files.output ?? []) {
+    entries.push({
+      path: item.path,
+      originalname: item.originalname,
+      role: "output"
+    });
+  }
+
+  for (const item of files.file ?? []) {
+    const role = toRole(req.body?.role);
+    entries.push({
+      path: item.path,
+      originalname: item.originalname,
+      role: role ?? "other"
+    });
+  }
+
+  return entries;
+}
+
+function resolveOutputFileName(parsed: ParsedWorkbook[], fallback?: string): string {
+  return parsed.find((item) => item.fileRole === "output")?.fileName ?? fallback ?? parsed[0]?.fileName ?? "";
+}
 
 export class WorkbookController {
   uploadWorkbook(req: Request, res: Response): void {
     try {
-      if (!req.file?.path) {
-        res.status(400).json({ message: "No file uploaded." });
+      const uploadItems = collectUploads(req);
+      if (uploadItems.length === 0) {
+        res.status(400).json({ message: "No file uploaded. Provide input/output files or a file with role=input|output." });
         return;
       }
 
-      const parsed = excelParserService.parseWorkbook(req.file.path);
-      const initial = graphBuilderService.buildFromCells("pending", parsed.cells, parsed.sheets);
-      const validationIssues = validationService.validate(initial.nodes);
+      for (const item of uploadItems) {
+        if (item.role === "other") {
+          res.status(400).json({ message: "Labeled upload must include role=input or role=output." });
+          return;
+        }
+      }
+
+      const parsedIncoming = uploadItems.map((item) =>
+        excelParserService.parseWorkbook(item.path, item.originalname, item.role)
+      );
+
+      const existingWorkbookId = typeof req.body?.workbookId === "string" ? req.body.workbookId : undefined;
+
+      if (existingWorkbookId) {
+        const session = workbookSessionService.getSession(existingWorkbookId);
+        if (!session) {
+          res.status(404).json({ message: "Workbook not found." });
+          return;
+        }
+
+        const mergedParsed = fileRegistryService.upsertFiles(existingWorkbookId, parsedIncoming);
+        const rebuilt = graphBuilderService.buildFromWorkbooks(mergedParsed);
+        const validationIssues = validationService.validate(rebuilt.nodes, rebuilt.files);
+        const computed = executionEngineService.recompute(rebuilt.nodes);
+        const outputFileName = resolveOutputFileName(mergedParsed, session.workbook.outputFileName);
+
+        const updatedWorkbook = workbookSessionService.updateWorkbook(
+          existingWorkbookId,
+          {
+            workbookId: existingWorkbookId,
+            nodes: computed.nodes,
+            edges: rebuilt.edges,
+            sheets: rebuilt.sheets,
+            files: rebuilt.files,
+            outputFileName,
+            validationIssues: [...validationIssues, ...computed.issues]
+          },
+          "Upload workbook"
+        );
+
+        res.status(200).json({
+          workbook: updatedWorkbook,
+          versions: workbookSessionService.getVersions(existingWorkbookId)
+        });
+        return;
+      }
+
+      const initial = graphBuilderService.buildFromWorkbooks(parsedIncoming);
+      const validationIssues = validationService.validate(initial.nodes, initial.files);
       const computed = executionEngineService.recompute(initial.nodes);
+      const outputFileName = resolveOutputFileName(parsedIncoming);
 
       const created = workbookSessionService.createSession({
         nodes: computed.nodes,
         edges: initial.edges,
-        sheets: parsed.sheets,
+        sheets: initial.sheets,
+        files: initial.files,
+        outputFileName,
         validationIssues: [...validationIssues, ...computed.issues]
       });
+
+      fileRegistryService.upsertFiles(created.workbookId, parsedIncoming);
 
       res.status(200).json({
         workbook: created,
@@ -88,14 +195,16 @@ export class WorkbookController {
         nodeMap.set(target.id, target);
       }
 
-      const rebuilt = graphBuilderService.rebuildFromNodes(workbookId, [...nodeMap.values()], session.workbook.sheets);
-      const validationIssues = validationService.validate(rebuilt.nodes);
+      const rebuilt = graphBuilderService.rebuildFromNodes([...nodeMap.values()], session.workbook.files);
+      const validationIssues = validationService.validate(rebuilt.nodes, rebuilt.files);
       const computed = executionEngineService.recompute(rebuilt.nodes, changedNodeIds);
 
       const updatedWorkbook = workbookSessionService.updateWorkbook(
         workbookId,
         {
+          workbookId,
           ...rebuilt,
+          outputFileName: session.workbook.outputFileName,
           validationIssues: [...validationIssues, ...computed.issues],
           nodes: computed.nodes
         },
@@ -130,8 +239,8 @@ export class WorkbookController {
 
       const exportPath = exportService.exportWorkbook(
         session.workbook.nodes,
-        session.workbook.sheets,
-        workbookId
+        workbookId,
+        session.workbook.outputFileName
       );
 
       res.download(exportPath, `excel-graph-engine-${workbookId}.xlsx`);

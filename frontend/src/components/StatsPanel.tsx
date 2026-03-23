@@ -3,6 +3,7 @@ import { useWorkbookStore } from "../store/workbookStore";
 
 export function StatsPanel() {
   const workbook = useWorkbookStore((s) => s.workbook);
+  const selectedFile = useWorkbookStore((s) => s.selectedFile);
   const selectedSheet = useWorkbookStore((s) => s.selectedSheet);
   const searchText = useWorkbookStore((s) => s.searchText);
 
@@ -11,10 +12,15 @@ export function StatsPanel() {
       return { nodes: 0, edges: 0, errors: 0, cycles: 0 };
     }
 
+    const fileNodes =
+      selectedFile === "ALL"
+        ? workbook.nodes
+        : workbook.nodes.filter((node) => node.fileName === selectedFile);
+
     const sheetNodes =
       selectedSheet === "ALL"
-        ? workbook.nodes
-        : workbook.nodes.filter((node) => node.sheet === selectedSheet);
+        ? fileNodes
+        : fileNodes.filter((node) => `${node.fileName}::${node.sheet}` === selectedSheet);
 
     const query = searchText.trim().toLowerCase();
     const visibleNodes = query
@@ -42,7 +48,7 @@ export function StatsPanel() {
       errors: issues.length,
       cycles: cycleCount,
     };
-  }, [workbook, selectedSheet, searchText]);
+  }, [workbook, selectedFile, selectedSheet, searchText]);
 
   return (
     <section className="panel stats-panel">

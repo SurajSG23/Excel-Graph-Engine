@@ -1,11 +1,41 @@
 import { GraphNode, ValidationIssue } from "../models/graph";
 
 export class ValidationService {
-  validate(nodes: GraphNode[]): ValidationIssue[] {
+  validate(
+    nodes: GraphNode[],
+    files: Array<{ fileName: string; sheets: string[] }> = []
+  ): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
     const nodeSet = new Set(nodes.map((node) => node.id));
+    const fileSet = new Set(files.map((file) => file.fileName));
+    const sheetSet = new Set(files.flatMap((file) => file.sheets.map((sheet) => `${file.fileName}::${sheet}`)));
 
     for (const node of nodes) {
+      for (const ref of node.referenceDetails) {
+        if (!ref.external) {
+          continue;
+        }
+
+        if (fileSet.size > 0 && !fileSet.has(ref.file)) {
+          issues.push({
+            type: "MISSING_REFERENCE",
+            nodeId: node.id,
+            message: `Node ${node.id} references missing external workbook ${ref.file}`,
+            relatedNodeIds: [node.id]
+          });
+          continue;
+        }
+
+        if (sheetSet.size > 0 && !sheetSet.has(`${ref.file}::${ref.sheet}`)) {
+          issues.push({
+            type: "MISSING_REFERENCE",
+            nodeId: node.id,
+            message: `Node ${node.id} references missing sheet ${ref.sheet} in ${ref.file}`,
+            relatedNodeIds: [node.id]
+          });
+        }
+      }
+
       for (const dep of node.dependencies) {
         if (!nodeSet.has(dep)) {
           issues.push({

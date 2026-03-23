@@ -31,14 +31,16 @@ You get:
 
 ### 2. Upload Workbook
 
-Upload an `.xlsx` file.
+Upload one or more `.xlsx` files.
 
 The app will:
 
-1. Read workbook sheets and cells.
-2. Build a cell dependency map.
-3. Compute initial values.
-4. Create an initial version snapshot.
+1. Accept a paired upload (`input` + `output`) or a labeled upload (`role=input|output`).
+2. Read workbook sheets and cells for each uploaded file.
+3. Parse internal and external formula references.
+4. Build a single global dependency graph across files.
+5. Compute initial values.
+6. Create an initial version snapshot.
 
 ### 3. Explore the Graph
 
@@ -103,6 +105,12 @@ npm run dev
 
 - Frontend: http://localhost:5173
 - Backend: http://localhost:4100
+
+## Multi-Workbook Notes
+
+- Node IDs are file-aware: `File.xlsx::Sheet1::A1`.
+- External Excel references such as `='[Input.xlsx]Sheet1'!A1` are parsed and linked as cross-file edges.
+- Export writes only the output workbook while preserving external formula syntax.
 
 ## Optional: Generate a Sample Workbook
 

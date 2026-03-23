@@ -5,9 +5,36 @@ const api = axios.create({
   baseURL: "/api"
 });
 
-export async function uploadWorkbook(file: File): Promise<WorkbookResponse> {
+export interface UploadPayload {
+  workbookId?: string;
+  inputFile?: File;
+  outputFile?: File;
+  labeledFile?: File;
+  role?: "input" | "output";
+}
+
+export async function uploadWorkbook(payload: UploadPayload): Promise<WorkbookResponse> {
   const form = new FormData();
-  form.append("file", file);
+  if (payload.workbookId) {
+    form.append("workbookId", payload.workbookId);
+  }
+
+  if (payload.inputFile) {
+    form.append("input", payload.inputFile);
+  }
+
+  if (payload.outputFile) {
+    form.append("output", payload.outputFile);
+  }
+
+  if (payload.labeledFile) {
+    form.append("file", payload.labeledFile);
+  }
+
+  if (payload.role) {
+    form.append("role", payload.role);
+  }
+
   const { data } = await api.post<WorkbookResponse>("/upload", form, {
     headers: {
       "Content-Type": "multipart/form-data"

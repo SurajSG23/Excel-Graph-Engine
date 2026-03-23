@@ -53,6 +53,8 @@ export function NodeInspector() {
         <dl>
           <dt>ID</dt>
           <dd>{node.id}</dd>
+          <dt>File</dt>
+          <dd>{node.fileName}</dd>
           <dt>Sheet</dt>
           <dd>{node.sheet}</dd>
           <dt>Cell</dt>
@@ -61,6 +63,14 @@ export function NodeInspector() {
           <dd>{formatNodeValue(node.value)}</dd>
           <dt>Dependencies</dt>
           <dd>{node.dependencies.length > 0 ? node.dependencies.join(", ") : "None"}</dd>
+          <dt>Reference Details</dt>
+          <dd>
+            {node.referenceDetails.length > 0
+              ? node.referenceDetails
+                  .map((ref) => `${ref.file}::${ref.sheet}::${ref.cell}${ref.external ? " (external)" : ""}`)
+                  .join(", ")
+              : "None"}
+          </dd>
         </dl>
 
         <form onSubmit={onSubmit} className="formula-form">

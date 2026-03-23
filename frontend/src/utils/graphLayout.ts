@@ -4,9 +4,9 @@ import { CellValue, GraphEdge, GraphNode } from "../types/workbook";
 
 const SHEET_COLORS = ["#16a34a", "#2563eb", "#9333ea", "#ea580c", "#0891b2", "#ca8a04", "#be123c"];
 const ROLE_COLORS = {
-  input: "#16a34a",
-  computed: "#2563eb",
-  output: "#9333ea",
+  input: "#2563eb",
+  computed: "#0f766e",
+  output: "#16a34a",
   error: "#dc2626",
   circular: "#b91c1c"
 } as const;
@@ -26,6 +26,7 @@ export interface FlowCellData {
   [key: string]: unknown;
   label: string;
   id: string;
+  fileName: string;
   sheet: string;
   value?: CellValue;
   formula?: string;
@@ -45,6 +46,7 @@ export interface FlowCellData {
 
 export interface FlowSheetGroupData {
   [key: string]: unknown;
+  fileName: string;
   sheet: string;
   nodeCount: number;
   color: string;
@@ -57,13 +59,25 @@ interface FlowBuildContext {
   downstream: Set<string>;
   errorNodeIds: Set<string>;
   circularNodeIds: Set<string>;
+  selectedFile: string | "ALL";
   selectedSheet: string | "ALL";
   zoomLevel: number;
 }
 
 interface LayoutResult {
   positions: Map<string, { x: number; y: number }>;
-  sheetBounds: Map<string, { x: number; y: number; width: number; height: number; nodeCount: number }>;
+  sheetBounds: Map<
+    string,
+    {
+      fileName: string;
+      sheet: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      nodeCount: number;
+    }
+  >;
 }
 
 function hashSheetColor(sheet: string): string {
@@ -94,14 +108,15 @@ export function toFlowNodes(
 
   const layout = layoutBySheetDirectional(graphNodes, graphEdges, context.selectedSheet);
 
-  const sheetGroups: Array<Node<FlowSheetGroupData>> = [...layout.sheetBounds.entries()].map(([sheet, bounds]) => ({
-    id: `group:${sheet}`,
+  const sheetGroups: Array<Node<FlowSheetGroupData>> = [...layout.sheetBounds.entries()].map(([groupKey, bounds]) => ({
+    id: `group:${groupKey}`,
     type: "sheetGroup",
     position: { x: bounds.x, y: bounds.y },
     data: {
-      sheet,
+      fileName: bounds.fileName,
+      sheet: bounds.sheet,
       nodeCount: bounds.nodeCount,
-      color: hashSheetColor(sheet)
+      color: hashSheetColor(groupKey)
     },
     style: {
       width: bounds.width,
@@ -124,7 +139,7 @@ export function toFlowNodes(
     const hasSelection = Boolean(context.selectedNodeId);
     const isDimmed = hasSelection && !isHighlighted;
 
-    let role: Role = node.formula ? "computed" : "input";
+    let role: Role = node.fileRole === "output" ? "output" : node.fileRole === "input" ? "input" : (node.formula ? "computed" : "input");
     if (nodeOut === 0 && nodeIn > 0) {
       role = "output";
     }
@@ -138,6 +153,7 @@ export function toFlowNodes(
       data: {
         id: node.id,
         label: `${node.cell}`,
+        fileName: node.fileName,
         sheet: node.sheet,
         value: node.value,
         formula: node.formula,
@@ -171,14 +187,15 @@ function layoutBySheetDirectional(
   selectedSheet: string | "ALL"
 ): LayoutResult {
   const positions = new Map<string, { x: number; y: number }>();
-  const sheetBounds = new Map<string, { x: number; y: number; width: number; height: number; nodeCount: number }>();
+  const sheetBounds = new Map<string, { fileName: string; sheet: string; x: number; y: number; width: number; height: number; nodeCount: number }>();
 
   const groupedBySheet = new Map<string, GraphNode[]>();
   for (const node of graphNodes) {
-    if (!groupedBySheet.has(node.sheet)) {
-      groupedBySheet.set(node.sheet, []);
+    const groupKey = `${node.fileName}::${node.sheet}`;
+    if (!groupedBySheet.has(groupKey)) {
+      groupedBySheet.set(groupKey, []);
     }
-    groupedBySheet.get(node.sheet)?.push(node);
+    groupedBySheet.get(groupKey)?.push(node);
   }
 
   const orderedSheets = [...groupedBySheet.keys()].sort((a, b) => a.localeCompare(b));
@@ -221,8 +238,8 @@ function layoutBySheetDirectional(
     }
   }
 
-  orderedSheets.forEach((sheet, sheetIdx) => {
-    const entry = perSheet.get(sheet);
+  orderedSheets.forEach((groupKey, sheetIdx) => {
+    const entry = perSheet.get(groupKey);
     if (!entry) {
       return;
     }
@@ -247,7 +264,11 @@ function layoutBySheetDirectional(
     const groupWidth = entry.width + SHEET_PADDING_X * 2;
     const groupHeight = entry.height + SHEET_PADDING_Y * 2;
 
-    sheetBounds.set(sheet, {
+    const [fileName, sheet] = groupKey.split("::");
+
+    sheetBounds.set(groupKey, {
+      fileName,
+      sheet,
       x: groupX,
       y: groupY,
       width: groupWidth,
@@ -306,7 +327,7 @@ function buildDagreLayout(
 export function toFlowEdges(
   graphEdges: GraphEdge[],
   highlight: Set<string>,
-  nodeSheetMap: Map<string, string>,
+  nodeFileMap: Map<string, string>,
   selectedNodeId: string | null,
   hoveredNodeId: string | null
 ): Edge[] {
@@ -350,13 +371,13 @@ export function toFlowEdges(
     const active = selectedNodeId
       ? edge.target === selectedNodeId && highlight.has(edge.source)
       : highlight.has(edge.source) && highlight.has(edge.target);
-    const isCrossSheet = nodeSheetMap.get(edge.source) !== nodeSheetMap.get(edge.target);
+    const isCrossFile = nodeFileMap.get(edge.source) !== nodeFileMap.get(edge.target);
     const hasSelection = Boolean(selectedNodeId);
     const hasHover = Boolean(hoveredNodeId);
 
     const stroke = active
-      ? (isCrossSheet ? "#7c3aed" : "#0f766e")
-      : (isCrossSheet ? "#b6a9df" : "#9ab3a5");
+      ? (isCrossFile ? "#7c3aed" : "#0f766e")
+      : (isCrossFile ? "#b6a9df" : "#9ab3a5");
     const opacity = hasSelection
       ? (active ? 0.96 : 0.02)
       : hasHover
@@ -370,7 +391,7 @@ export function toFlowEdges(
       sourceHandle: `out-${sourceSlot % HANDLE_SLOT_COUNT}`,
       targetHandle: `in-${targetSlot % HANDLE_SLOT_COUNT}`,
       type: "bezier",
-      className: isCrossSheet ? "edge-cross-sheet" : "edge-same-sheet",
+      className: isCrossFile ? "edge-cross-file" : "edge-same-sheet",
       zIndex: 0,
       markerEnd: {
         type: MarkerType.ArrowClosed,
@@ -381,7 +402,7 @@ export function toFlowEdges(
       animated: false,
       style: {
         stroke,
-        strokeDasharray: isCrossSheet ? (active ? "7 5" : "4 4") : undefined,
+        strokeDasharray: isCrossFile ? (active ? "7 5" : "4 4") : undefined,
         strokeWidth: active ? 2.6 : 1.55,
         strokeLinecap: "round",
         opacity,

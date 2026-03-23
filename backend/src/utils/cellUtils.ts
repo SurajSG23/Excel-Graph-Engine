@@ -4,13 +4,22 @@ export function normalizeSheetName(sheet: string): string {
   return sheet.replace(/^'|'$/g, "").trim();
 }
 
-export function toNodeId(sheet: string, cell: string): string {
-  return `${normalizeSheetName(sheet)}!${normalizeCellAddress(cell)}`;
+export function normalizeFileName(fileName: string): string {
+  const normalized = fileName.trim().replace(/^'|'$/g, "");
+  const withoutBrackets = normalized.replace(/^\[/, "").replace(/\]$/, "");
+  const parts = withoutBrackets.split(/[\\/]/).filter(Boolean);
+  const last = parts.length > 0 ? parts[parts.length - 1] : withoutBrackets;
+  return last;
 }
 
-export function splitNodeId(nodeId: string): { sheet: string; cell: string } {
-  const [sheet, cell] = nodeId.split("!");
+export function toNodeId(fileName: string, sheet: string, cell: string): string {
+  return `${normalizeFileName(fileName)}::${normalizeSheetName(sheet)}::${normalizeCellAddress(cell)}`;
+}
+
+export function splitNodeId(nodeId: string): { fileName: string; sheet: string; cell: string } {
+  const [fileName, sheet, cell] = nodeId.split("::");
   return {
+    fileName,
     sheet,
     cell
   };

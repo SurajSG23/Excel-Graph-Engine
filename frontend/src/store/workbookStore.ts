@@ -6,13 +6,20 @@ interface WorkbookState {
   workbook: WorkbookGraph | null;
   versions: VersionItem[];
   selectedNodeId: string | null;
+  selectedFile: string | "ALL";
   selectedSheet: string | "ALL";
   searchText: string;
   showZeroDependencyNodes: boolean;
   loading: boolean;
   error: string | null;
-  uploadFile: (file: File) => Promise<void>;
+  uploadFiles: (payload: {
+    inputFile?: File;
+    outputFile?: File;
+    labeledFile?: File;
+    role?: "input" | "output";
+  }) => Promise<void>;
   setSelectedNode: (id: string | null) => void;
+  setSelectedFile: (file: string | "ALL") => void;
   setSelectedSheet: (sheet: string | "ALL") => void;
   setSearchText: (value: string) => void;
   setShowZeroDependencyNodes: (value: boolean) => void;
@@ -24,20 +31,32 @@ export const useWorkbookStore = create<WorkbookState>((set, get) => ({
   workbook: null,
   versions: [],
   selectedNodeId: null,
+  selectedFile: "ALL",
   selectedSheet: "ALL",
   searchText: "",
   showZeroDependencyNodes: true,
   loading: false,
   error: null,
 
-  async uploadFile(file) {
+  async uploadFiles(payload) {
     set({ loading: true, error: null });
     try {
-      const response = await uploadWorkbook(file);
+      const response = await uploadWorkbook({
+        workbookId: get().workbook?.workbookId,
+        ...payload
+      });
+
+      const nextSelectedFile = get().selectedFile === "ALL"
+        ? "ALL"
+        : response.workbook.files.some((file) => file.fileName === get().selectedFile)
+          ? get().selectedFile
+          : "ALL";
+
       set({
         workbook: response.workbook,
         versions: response.versions,
         selectedNodeId: null,
+        selectedFile: nextSelectedFile,
         selectedSheet: "ALL",
         loading: false
       });
@@ -51,6 +70,10 @@ export const useWorkbookStore = create<WorkbookState>((set, get) => ({
 
   setSelectedNode(id) {
     set({ selectedNodeId: id });
+  },
+
+  setSelectedFile(file) {
+    set({ selectedFile: file, selectedSheet: "ALL" });
   },
 
   setSelectedSheet(sheet) {

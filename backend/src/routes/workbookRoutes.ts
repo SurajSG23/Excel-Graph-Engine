@@ -28,7 +28,15 @@ const upload = multer({
   }
 });
 
-router.post("/upload", upload.single("file"), (req, res) => workbookController.uploadWorkbook(req, res));
+router.post(
+  "/upload",
+  upload.fields([
+    { name: "file", maxCount: 1 },
+    { name: "input", maxCount: 1 },
+    { name: "output", maxCount: 1 }
+  ]),
+  (req, res) => workbookController.uploadWorkbook(req, res)
+);
 router.post("/recompute", (req, res) => workbookController.recomputeWorkbook(req, res));
 router.post("/export", (req, res) => workbookController.exportWorkbook(req, res));
 
