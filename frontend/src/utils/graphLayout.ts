@@ -61,7 +61,6 @@ interface FlowBuildContext {
   circularNodeIds: Set<string>;
   selectedFile: string | "ALL";
   selectedSheet: string | "ALL";
-  zoomLevel: number;
 }
 
 interface LayoutResult {
@@ -168,7 +167,7 @@ export function toFlowNodes(
         dependencies: node.dependencies,
         isDimmed,
         isHovered: false,
-        showExtra: context.zoomLevel > 0.95
+        showExtra: true
       },
       position: layout.positions.get(node.id) ?? { x: 0, y: 0 },
       style: {

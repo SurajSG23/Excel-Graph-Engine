@@ -31,7 +31,6 @@ export function GraphCanvas() {
   const showZeroDependencyNodes = useWorkbookStore((s) => s.showZeroDependencyNodes);
   const setSelectedNode = useWorkbookStore((s) => s.setSelectedNode);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
-  const [zoomLevel, setZoomLevel] = useState(1);
   const [reactFlowInstance, setReactFlowInstance] =
     useState<ReactFlowInstance | null>(null);
   const lastFitKey = useRef<string>("");
@@ -141,8 +140,7 @@ export function GraphCanvas() {
         errorNodeIds: issueSummary.errorNodeIds,
         circularNodeIds: issueSummary.circularNodeIds,
         selectedFile,
-        selectedSheet,
-        zoomLevel,
+        selectedSheet
       }),
     [
       filtered.nodes,
@@ -154,8 +152,7 @@ export function GraphCanvas() {
       issueSummary.errorNodeIds,
       issueSummary.circularNodeIds,
       selectedFile,
-      selectedSheet,
-      zoomLevel,
+      selectedSheet
     ],
   );
 
@@ -171,8 +168,6 @@ export function GraphCanvas() {
     [filtered.edges, highlight, nodeFileMap, selectedNodeId, hoveredNodeId],
   );
 
-  const [nodes, setNodes] = useState(flowNodes);
-  const [edges, setEdges] = useState(flowEdges);
   const stats = useMemo(
     () => ({
       nodeCount: filtered.nodes.length,
@@ -180,14 +175,6 @@ export function GraphCanvas() {
     }),
     [filtered.nodes.length, filtered.edges.length]
   );
-
-  useEffect(() => {
-    setNodes(flowNodes);
-  }, [flowNodes, setNodes]);
-
-  useEffect(() => {
-    setEdges(flowEdges);
-  }, [flowEdges, setEdges]);
 
   useEffect(() => {
     if (!workbook) {
@@ -232,9 +219,10 @@ export function GraphCanvas() {
   return (
     <section className="canvas-shell">
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={flowNodes}
+        edges={flowEdges}
         nodeTypes={nodeTypes}
+        onlyRenderVisibleElements
         fitView
         fitViewOptions={{ padding: 0.18 }}
         minZoom={0.25}
@@ -256,7 +244,6 @@ export function GraphCanvas() {
           setSelectedNode(null);
           setHoveredNodeId(null);
         }}
-        onMove={(_event, viewport) => setZoomLevel(viewport.zoom)}
       >
         <MiniMap
           pannable
