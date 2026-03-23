@@ -270,53 +270,33 @@ function buildDagreLayout(
   nodes: GraphNode[],
   edges: GraphEdge[]
 ): { positions: Map<string, { x: number; y: number }>; width: number; height: number; nodeCount: number } {
-  const graph = new dagre.graphlib.Graph();
-  graph.setDefaultEdgeLabel(() => ({}));
-  graph.setGraph({
-    rankdir: "LR",
-    nodesep: 62,
-    ranksep: 118,
-    marginx: 0,
-    marginy: 0
+  const positions = new Map<string, { x: number; y: number }>();
+
+  if (nodes.length === 0) {
+    return { positions, width: 320, height: 240, nodeCount: 0 };
+  }
+
+  const cols = Math.ceil(Math.sqrt(nodes.length));
+  const rows = Math.ceil(nodes.length / cols);
+
+  const cellWidth = NODE_WIDTH + 90;
+  const cellHeight = NODE_HEIGHT + 90;
+
+  nodes.forEach((node, index) => {
+    const row = Math.floor(index / cols);
+    const col = index % cols;
+
+    const x = col * cellWidth;
+    const y = row * cellHeight;
+
+    positions.set(node.id, { x, y });
   });
 
-  for (const node of nodes) {
-    graph.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
-  }
-
-  for (const edge of edges) {
-    graph.setEdge(edge.source, edge.target);
-  }
-
-  dagre.layout(graph);
-
-  const raw = new Map<string, { x: number; y: number }>();
-  let minX = Number.POSITIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-
-  for (const node of nodes) {
-    const p = graph.node(node.id);
-    const x = p.x - NODE_WIDTH / 2;
-    const y = p.y - NODE_HEIGHT / 2;
-    raw.set(node.id, { x, y });
-    minX = Math.min(minX, x);
-    minY = Math.min(minY, y);
-    maxX = Math.max(maxX, x + NODE_WIDTH);
-    maxY = Math.max(maxY, y + NODE_HEIGHT);
-  }
-
-  const normalized = new Map<string, { x: number; y: number }>();
-  for (const [id, pos] of raw) {
-    normalized.set(id, { x: pos.x - minX, y: pos.y - minY });
-  }
-
-  const width = Number.isFinite(maxX) ? Math.max(320, maxX - minX) : 320;
-  const height = Number.isFinite(maxY) ? Math.max(240, maxY - minY) : 240;
+  const width = Math.max(320, cols * cellWidth);
+  const height = Math.max(240, rows * cellHeight);
 
   return {
-    positions: normalized,
+    positions,
     width,
     height,
     nodeCount: nodes.length
@@ -391,7 +371,7 @@ export function toFlowEdges(
       targetHandle: `in-${targetSlot % HANDLE_SLOT_COUNT}`,
       type: "bezier",
       className: isCrossSheet ? "edge-cross-sheet" : "edge-same-sheet",
-      zIndex: 1,
+      zIndex: 0,
       markerEnd: {
         type: MarkerType.ArrowClosed,
         width: active ? 13 : 10,
