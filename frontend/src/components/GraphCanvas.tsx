@@ -2,15 +2,21 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   Controls,
+  Edge,
   MiniMap,
+  Node,
   Panel,
   ReactFlow,
   ReactFlowInstance,
+  useEdgesState,
+  useNodesState,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useWorkbookStore } from "../store/workbookStore";
 import {
   buildTraversalSets,
+  FlowCellData,
+  FlowSheetGroupData,
   toFlowEdges,
   toFlowNodes,
 } from "../utils/graphLayout";
@@ -22,6 +28,9 @@ const nodeTypes = {
   sheetGroup: SheetGroupNode,
 };
 
+type FlowNode = Node<FlowCellData> | Node<FlowSheetGroupData>;
+type FlowEdge = Edge;
+
 export function GraphCanvas() {
   const workbook = useWorkbookStore((s) => s.workbook);
   const selectedNodeId = useWorkbookStore((s) => s.selectedNodeId);
@@ -30,9 +39,10 @@ export function GraphCanvas() {
   const searchText = useWorkbookStore((s) => s.searchText);
   const showZeroDependencyNodes = useWorkbookStore((s) => s.showZeroDependencyNodes);
   const setSelectedNode = useWorkbookStore((s) => s.setSelectedNode);
+  const applyOperations = useWorkbookStore((s) => s.applyOperations);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [reactFlowInstance, setReactFlowInstance] =
-    useState<ReactFlowInstance | null>(null);
+    useState<ReactFlowInstance<FlowNode, FlowEdge> | null>(null);
   const lastFitKey = useRef<string>("");
 
   const filtered = useMemo(() => {
@@ -156,6 +166,11 @@ export function GraphCanvas() {
     ],
   );
 
+  const sheetGroups = useMemo(
+    () => flowNodes.filter((node) => node.type === "sheetGroup"),
+    [flowNodes]
+  );
+
   const flowEdges = useMemo(
     () =>
       toFlowEdges(
@@ -168,6 +183,9 @@ export function GraphCanvas() {
     [filtered.edges, highlight, nodeFileMap, selectedNodeId, hoveredNodeId],
   );
 
+  const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(flowNodes as FlowNode[]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>(flowEdges as FlowEdge[]);
+
   const stats = useMemo(
     () => ({
       nodeCount: filtered.nodes.length,
@@ -175,6 +193,14 @@ export function GraphCanvas() {
     }),
     [filtered.nodes.length, filtered.edges.length]
   );
+
+  useEffect(() => {
+    setNodes(flowNodes);
+  }, [flowNodes, setNodes]);
+
+  useEffect(() => {
+    setEdges(flowEdges);
+  }, [flowEdges, setEdges]);
 
   useEffect(() => {
     if (!workbook) {
@@ -218,11 +244,14 @@ export function GraphCanvas() {
 
   return (
     <section className="canvas-shell">
-      <ReactFlow
-        nodes={flowNodes}
-        edges={flowEdges}
+      <ReactFlow<FlowNode, FlowEdge>
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
         onlyRenderVisibleElements
+        nodesDraggable
         fitView
         fitViewOptions={{ padding: 0.18 }}
         minZoom={0.25}
@@ -243,6 +272,64 @@ export function GraphCanvas() {
         onPaneClick={() => {
           setSelectedNode(null);
           setHoveredNodeId(null);
+        }}
+        onNodeDragStop={(_event, draggedNode) => {
+          if (draggedNode.type !== "cellNode") {
+            return;
+          }
+
+          const source = workbook.nodes.find((node) => node.id === draggedNode.id);
+          if (!source) {
+            return;
+          }
+
+          const width = Number(draggedNode.width ?? 150);
+          const height = Number(draggedNode.height ?? 84);
+          const centerX = draggedNode.position.x + width / 2;
+          const centerY = draggedNode.position.y + height / 2;
+
+          let targetGroup: Node | undefined;
+          for (const group of sheetGroups) {
+            const groupWidth = Number(group.style?.width ?? group.width ?? 0);
+            const groupHeight = Number(group.style?.height ?? group.height ?? 0);
+            const minX = group.position.x;
+            const minY = group.position.y;
+            const maxX = minX + groupWidth;
+            const maxY = minY + groupHeight;
+            if (centerX >= minX && centerX <= maxX && centerY >= minY && centerY <= maxY) {
+              targetGroup = group;
+              break;
+            }
+          }
+
+          if (!targetGroup) {
+            return;
+          }
+
+          const targetData = targetGroup.data as { fileName?: string; sheet?: string } | undefined;
+          const targetFileName = targetData?.fileName;
+          const targetSheet = targetData?.sheet;
+
+          if (!targetFileName || !targetSheet) {
+            return;
+          }
+
+          if (source.fileName === targetFileName && source.sheet === targetSheet) {
+            return;
+          }
+
+          void applyOperations(
+            [
+              {
+                type: "MOVE_CELL",
+                fromNodeId: source.id,
+                toFileName: targetFileName,
+                toSheet: targetSheet,
+                toCell: source.cell
+              }
+            ],
+            `Move ${source.id} to ${targetFileName}::${targetSheet}`
+          );
         }}
       >
         <MiniMap
