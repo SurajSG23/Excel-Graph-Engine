@@ -16,19 +16,22 @@ import { useWorkbookStore } from "../store/workbookStore";
 import {
   buildTraversalSets,
   FlowCellData,
+  FlowRoleGroupData,
   FlowSheetGroupData,
   toFlowEdges,
   toFlowNodes,
 } from "../utils/graphLayout";
 import { CellNode } from "./CellNode";
+import { RoleGroupNode } from "./RoleGroupNode";
 import { SheetGroupNode } from "./SheetGroupNode";
 
 const nodeTypes = {
   cellNode: CellNode,
+  roleGroup: RoleGroupNode,
   sheetGroup: SheetGroupNode,
 };
 
-type FlowNode = Node<FlowCellData> | Node<FlowSheetGroupData>;
+type FlowNode = Node<FlowCellData> | Node<FlowRoleGroupData> | Node<FlowSheetGroupData>;
 type FlowEdge = Edge;
 
 export function GraphCanvas() {
@@ -338,6 +341,9 @@ export function GraphCanvas() {
           style={{ width: 130, height: 78, borderRadius: 8 }}
           nodeBorderRadius={8}
           nodeColor={(node) => {
+            if (node.type === "roleGroup") {
+              return String((node.data as { color?: string } | undefined)?.color ?? "#cbd5e1");
+            }
             if (node.type === "sheetGroup") {
               return "#eaf4ee";
             }

@@ -1,4 +1,5 @@
 import { ChangeEvent, useState } from "react";
+import { CheckCircle2, FileUp } from "lucide-react";
 import { useWorkbookStore } from "../store/workbookStore";
 
 export function UploadCard() {
@@ -33,7 +34,9 @@ export function UploadCard() {
       <p>Provide input and output workbooks together.</p>
 
       <div className="upload-grid">
-        <label className={`upload-dropzone ${loading ? "is-loading" : ""}`}>
+        <label
+          className={`upload-dropzone ${loading ? "is-loading" : ""} ${inputFile ? "is-selected" : ""}`}
+        >
           <input
             className="upload-input-native"
             type="file"
@@ -42,12 +45,18 @@ export function UploadCard() {
             disabled={loading}
           />
           <span className="upload-dropzone-line upload-dropzone-title">Input workbook</span>
+          <span className="upload-status-badge">
+            {inputFile ? <CheckCircle2 size={14} /> : <FileUp size={14} />}
+            {inputFile ? "Selected" : "Awaiting file"}
+          </span>
           <span className="upload-dropzone-line upload-dropzone-subtitle">
             {inputFile ? inputFile.name : "Select .xlsx"}
           </span>
         </label>
 
-        <label className={`upload-dropzone ${loading ? "is-loading" : ""}`}>
+        <label
+          className={`upload-dropzone ${loading ? "is-loading" : ""} ${outputFile ? "is-selected" : ""}`}
+        >
           <input
             className="upload-input-native"
             type="file"
@@ -56,6 +65,10 @@ export function UploadCard() {
             disabled={loading}
           />
           <span className="upload-dropzone-line upload-dropzone-title">Output workbook</span>
+          <span className="upload-status-badge">
+            {outputFile ? <CheckCircle2 size={14} /> : <FileUp size={14} />}
+            {outputFile ? "Selected" : "Awaiting file"}
+          </span>
           <span className="upload-dropzone-line upload-dropzone-subtitle">
             {outputFile ? outputFile.name : "Select .xlsx"}
           </span>

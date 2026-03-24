@@ -1,6 +1,6 @@
 ﻿import dagre from "dagre";
 import { Edge, MarkerType, Node } from "@xyflow/react";
-import { CellValue, GraphEdge, GraphNode } from "../types/workbook";
+import { CellValue, GraphEdge, GraphNode, WorkbookRole } from "../types/workbook";
 
 const SHEET_COLORS = ["#16a34a", "#2563eb", "#9333ea", "#ea580c", "#0891b2", "#ca8a04", "#be123c"];
 const ROLE_COLORS = {
@@ -52,6 +52,14 @@ export interface FlowSheetGroupData {
   color: string;
 }
 
+export interface FlowRoleGroupData {
+  [key: string]: unknown;
+  role: WorkbookRole | "other";
+  label: string;
+  sheetCount: number;
+  color: string;
+}
+
 interface FlowBuildContext {
   selectedNodeId: string | null;
   highlight: Set<string>;
@@ -70,11 +78,24 @@ interface LayoutResult {
     {
       fileName: string;
       sheet: string;
+      role: WorkbookRole | "other";
       x: number;
       y: number;
       width: number;
       height: number;
       nodeCount: number;
+    }
+  >;
+  roleBounds: Map<
+    string,
+    {
+      role: WorkbookRole | "other";
+      label: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      sheetCount: number;
     }
   >;
 }
@@ -91,7 +112,7 @@ export function toFlowNodes(
   graphNodes: GraphNode[],
   graphEdges: GraphEdge[],
   context: FlowBuildContext
-): Array<Node<FlowCellData> | Node<FlowSheetGroupData>> {
+): Array<Node<FlowCellData> | Node<FlowSheetGroupData> | Node<FlowRoleGroupData>> {
   const indegree = new Map<string, number>();
   const outdegree = new Map<string, number>();
 
@@ -106,6 +127,26 @@ export function toFlowNodes(
   }
 
   const layout = layoutBySheetDirectional(graphNodes, graphEdges, context.selectedSheet);
+
+  const roleGroups: Array<Node<FlowRoleGroupData>> = [...layout.roleBounds.entries()].map(([roleKey, bounds]) => ({
+    id: `role:${roleKey}`,
+    type: "roleGroup",
+    position: { x: bounds.x, y: bounds.y },
+    data: {
+      role: bounds.role,
+      label: bounds.label,
+      sheetCount: bounds.sheetCount,
+      color: bounds.role === "input" ? "#2563eb" : bounds.role === "output" ? "#16a34a" : "#64748b"
+    },
+    style: {
+      width: bounds.width,
+      height: bounds.height
+    },
+    selectable: false,
+    draggable: false,
+    connectable: false,
+    zIndex: -2
+  }));
 
   const sheetGroups: Array<Node<FlowSheetGroupData>> = [...layout.sheetBounds.entries()].map(([groupKey, bounds]) => ({
     id: `group:${groupKey}`,
@@ -177,7 +218,7 @@ export function toFlowNodes(
     } satisfies Node<FlowCellData>;
   });
 
-  return [...sheetGroups, ...cellNodes];
+  return [...roleGroups, ...sheetGroups, ...cellNodes];
 }
 
 function layoutBySheetDirectional(
@@ -186,7 +227,7 @@ function layoutBySheetDirectional(
   selectedSheet: string | "ALL"
 ): LayoutResult {
   const positions = new Map<string, { x: number; y: number }>();
-  const sheetBounds = new Map<string, { fileName: string; sheet: string; x: number; y: number; width: number; height: number; nodeCount: number }>();
+  const sheetBounds = new Map<string, { fileName: string; sheet: string; role: WorkbookRole | "other"; x: number; y: number; width: number; height: number; nodeCount: number }>();
 
   const groupedBySheet = new Map<string, GraphNode[]>();
   for (const node of graphNodes) {
@@ -199,12 +240,15 @@ function layoutBySheetDirectional(
 
   const orderedSheets = [...groupedBySheet.keys()].sort((a, b) => a.localeCompare(b));
 
-  const perSheet = new Map<string, { positions: Map<string, { x: number; y: number }>; width: number; height: number; nodeCount: number }>();
+  const perSheet = new Map<string, { positions: Map<string, { x: number; y: number }>; width: number; height: number; nodeCount: number; role: WorkbookRole | "other" }>();
   for (const sheet of orderedSheets) {
     const nodes = groupedBySheet.get(sheet) ?? [];
     const idSet = new Set(nodes.map((n) => n.id));
     const edges = graphEdges.filter((e) => idSet.has(e.source) && idSet.has(e.target));
-    perSheet.set(sheet, buildDagreLayout(nodes, edges));
+    perSheet.set(sheet, {
+      ...buildDagreLayout(nodes, edges),
+      role: nodes[0]?.fileRole ?? "other"
+    });
   }
 
   const rowHeights: number[] = [];
@@ -268,6 +312,7 @@ function layoutBySheetDirectional(
     sheetBounds.set(groupKey, {
       fileName,
       sheet,
+      role: entry.role,
       x: groupX,
       y: groupY,
       width: groupWidth,
@@ -283,7 +328,44 @@ function layoutBySheetDirectional(
     }
   });
 
-  return { positions, sheetBounds };
+  const roleBounds = new Map<string, { role: WorkbookRole | "other"; label: string; x: number; y: number; width: number; height: number; sheetCount: number }>();
+  const rolePaddingX = 32;
+  const rolePaddingY = 44;
+
+  for (const [groupKey, bounds] of sheetBounds) {
+    const roleKey = bounds.role;
+    const existing = roleBounds.get(roleKey);
+    const minX = bounds.x;
+    const minY = bounds.y;
+    const maxX = bounds.x + bounds.width;
+    const maxY = bounds.y + bounds.height;
+
+    if (!existing) {
+      roleBounds.set(roleKey, {
+        role: bounds.role,
+        label: bounds.role === "input" ? "Input" : bounds.role === "output" ? "Output" : bounds.role === "other" ? "Other" : String(bounds.role),
+        x: minX - rolePaddingX,
+        y: minY - rolePaddingY,
+        width: bounds.width + rolePaddingX * 2,
+        height: bounds.height + rolePaddingY * 2,
+        sheetCount: 1
+      });
+      continue;
+    }
+
+    const currentMinX = Math.min(existing.x + rolePaddingX, minX);
+    const currentMinY = Math.min(existing.y + rolePaddingY, minY);
+    const currentMaxX = Math.max(existing.x + existing.width - rolePaddingX, maxX);
+    const currentMaxY = Math.max(existing.y + existing.height - rolePaddingY, maxY);
+
+    existing.x = currentMinX - rolePaddingX;
+    existing.y = currentMinY - rolePaddingY;
+    existing.width = currentMaxX - currentMinX + rolePaddingX * 2;
+    existing.height = currentMaxY - currentMinY + rolePaddingY * 2;
+    existing.sheetCount += 1;
+  }
+
+  return { positions, sheetBounds, roleBounds };
 }
 
 function buildDagreLayout(
