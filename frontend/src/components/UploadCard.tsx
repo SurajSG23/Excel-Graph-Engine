@@ -25,19 +25,12 @@ export function UploadCard() {
     await uploadFiles({ inputFile, outputFile });
   };
 
-  const onUploadLabeled = async (role: "input" | "output"): Promise<void> => {
-    const file = role === "input" ? inputFile : outputFile;
-    if (!file) {
-      return;
-    }
-
-    await uploadFiles({ labeledFile: file, role });
-  };
+  // single-file labeled uploads removed; only paired upload is supported now
 
   return (
     <section className="upload-card panel">
       <summary>Workbook Upload</summary>
-      <p>Provide input and output workbooks together, or upload one side at a time.</p>
+      <p>Provide input and output workbooks together.</p>
 
       <div className="upload-grid">
         <label className={`upload-dropzone ${loading ? "is-loading" : ""}`}>
@@ -72,12 +65,6 @@ export function UploadCard() {
       <div className="upload-actions">
         <button type="button" onClick={onUploadPair} disabled={loading || (!inputFile && !outputFile)}>
           {loading ? "Processing..." : "Upload Selected Workbooks"}
-        </button>
-        <button type="button" onClick={() => onUploadLabeled("input")} disabled={loading || !inputFile}>
-          Upload Input Only
-        </button>
-        <button type="button" onClick={() => onUploadLabeled("output")} disabled={loading || !outputFile}>
-          Upload Output Only
         </button>
       </div>
     </section>

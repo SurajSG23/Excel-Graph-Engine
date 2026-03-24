@@ -273,6 +273,47 @@ body {
   align-items: stretch;
 }
 
+.toolbar-inline-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.toolbar-icon-button {
+  width: auto;
+  min-width: 96px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.38rem;
+  padding: 0.55rem 0.78rem;
+  border-radius: 12px;
+  border: 1px solid #134e4a;
+  background: linear-gradient(180deg, #0f172a, #111827);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.14);
+}
+
+.toolbar-icon-button svg {
+  flex: 0 0 auto;
+  color: currentColor;
+}
+
+.toolbar-icon-button span {
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.toolbar-icon-button:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.toolbar-icon-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .topbar label {
   display: flex;
   flex-direction: column;
