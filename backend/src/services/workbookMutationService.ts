@@ -172,17 +172,20 @@ export class WorkbookMutationService {
           }
 
           const oldId = source.id;
-          const newId = toNodeId(op.toFileName, op.toSheet, op.toCell);
-          for (let i = workingNodes.length - 1; i >= 0; i -= 1) {
-            if (workingNodes[i].id === newId && workingNodes[i].id !== oldId) {
-              workingNodes.splice(i, 1);
-            }
-          }
+          const normalizedSheet = normalizeSheetName(op.toSheet);
+          const targetCell = this.findNextAvailableCell(
+            workingNodes,
+            op.toFileName,
+            normalizedSheet,
+            op.toCell,
+            oldId
+          );
+          const newId = toNodeId(op.toFileName, normalizedSheet, targetCell);
 
           const map = new Map<string, string>([[oldId, newId]]);
           source.fileName = op.toFileName;
-          source.sheet = normalizeSheetName(op.toSheet);
-          source.cell = normalizeCellAddress(op.toCell);
+          source.sheet = normalizedSheet;
+          source.cell = targetCell;
           source.id = newId;
           source.formula = applyReferenceMapToFormula(source.formula, source.fileName, source.sheet, map);
           this.rewriteAllFormulas(workingNodes, map);
@@ -257,6 +260,49 @@ export class WorkbookMutationService {
     for (const node of nodes) {
       node.formula = applyReferenceMapToFormula(node.formula, node.fileName, node.sheet, map);
     }
+  }
+
+  private findNextAvailableCell(
+    nodes: GraphNode[],
+    fileName: string,
+    sheet: string,
+    preferredCell: string,
+    ignoreNodeId?: string
+  ): string {
+    const normalizedPreferred = normalizeCellAddress(preferredCell);
+    const occupied = new Set(
+      nodes
+        .filter(
+          (node) =>
+            node.fileName === fileName &&
+            node.sheet === sheet &&
+            (!ignoreNodeId || node.id !== ignoreNodeId)
+        )
+        .map((node) => node.cell)
+    );
+
+    if (!occupied.has(normalizedPreferred)) {
+      return normalizedPreferred;
+    }
+
+    const parsed = parseCellRef(normalizedPreferred);
+    if (!parsed) {
+      let row = 1;
+      while (occupied.has(`A${row}`)) {
+        row += 1;
+      }
+      return `A${row}`;
+    }
+
+    const startCol = colToNumber(parsed.col);
+    let row = parsed.row;
+
+    // Prefer the same column and advance downward to avoid overwriting existing cells.
+    while (occupied.has(`${numberToCol(startCol)}${row}`)) {
+      row += 1;
+    }
+
+    return `${numberToCol(startCol)}${row}`;
   }
 
   private shiftRows(

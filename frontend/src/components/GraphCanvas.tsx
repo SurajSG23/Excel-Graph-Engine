@@ -22,12 +22,10 @@ import {
   toFlowNodes,
 } from "../utils/graphLayout";
 import { CellNode } from "./CellNode";
-import { RoleGroupNode } from "./RoleGroupNode";
 import { SheetGroupNode } from "./SheetGroupNode";
 
 const nodeTypes = {
   cellNode: CellNode,
-  roleGroup: RoleGroupNode,
   sheetGroup: SheetGroupNode,
 };
 
