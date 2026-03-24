@@ -181,10 +181,26 @@ export const useWorkbookStore = create<WorkbookState>((set, get) => ({
         loading: false
       });
     } catch (error) {
-      set({
-        loading: false,
-        error: error instanceof Error ? error.message : "Undo failed"
-      });
+      const message =
+        error && typeof error === "object" && "response" in error && (error as any).response?.data
+          ? // axios-style response body
+            ((): string => {
+              const d = (error as any).response.data;
+              if (!d) return "Undo failed";
+              if (typeof d === "string") return d;
+              if (d.message) return d.message;
+              if (d.error) return d.error;
+              try {
+                return JSON.stringify(d);
+              } catch (_) {
+                return "Undo failed";
+              }
+            })()
+          : error instanceof Error
+          ? error.message
+          : "Undo failed";
+
+      set({ loading: false, error: message });
     }
   },
 
@@ -203,10 +219,26 @@ export const useWorkbookStore = create<WorkbookState>((set, get) => ({
         loading: false
       });
     } catch (error) {
-      set({
-        loading: false,
-        error: error instanceof Error ? error.message : "Redo failed"
-      });
+      const message =
+        error && typeof error === "object" && "response" in error && (error as any).response?.data
+          ? // axios-style response body
+            ((): string => {
+              const d = (error as any).response.data;
+              if (!d) return "Redo failed";
+              if (typeof d === "string") return d;
+              if (d.message) return d.message;
+              if (d.error) return d.error;
+              try {
+                return JSON.stringify(d);
+              } catch (_) {
+                return "Redo failed";
+              }
+            })()
+          : error instanceof Error
+          ? error.message
+          : "Redo failed";
+
+      set({ loading: false, error: message });
     }
   }
 }));

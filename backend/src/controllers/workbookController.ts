@@ -292,7 +292,7 @@ export class WorkbookController {
       });
     } catch (error) {
       res.status(400).json({
-        message: "Undo failed.",
+        message: "No earlier versions found.",
         detail: error instanceof Error ? error.message : "Unknown error"
       });
     }
@@ -313,7 +313,7 @@ export class WorkbookController {
       });
     } catch (error) {
       res.status(400).json({
-        message: "Redo failed.",
+        message: "You're on the latest version.",
         detail: error instanceof Error ? error.message : "Unknown error"
       });
     }
