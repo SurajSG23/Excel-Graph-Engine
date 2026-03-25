@@ -1007,13 +1007,30 @@ button:hover {
 .inspector dl {
   margin: 0;
   display: grid;
-  grid-template-columns: 88px 1fr;
-  gap: 0.3rem 0.5rem;
+  grid-template-columns: minmax(88px, 0.92fr) minmax(0, 1.58fr);
+  gap: 0.35rem 0.65rem;
   font-size: 0.9rem;
 }
 
 .inspector dt {
   font-weight: 700;
+}
+
+.inspector dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.45;
+}
+
+.inspector dt,
+.inspector dd {
+  align-self: start;
+}
+
+.inspector dd + dt {
+  margin-top: 0.2rem;
 }
 
 .formula-form {
@@ -1025,7 +1042,8 @@ button:hover {
 .validations ul,
 .versions ul {
   margin: 0;
-  padding-left: 1rem;
+  padding: 0;
+  list-style: none;
   max-height: 170px;
   overflow: auto;
   display: grid;
@@ -1090,6 +1108,22 @@ button:hover {
   display: grid;
   gap: 0.2rem;
   color: #991b1b;
+  padding: 0.52rem 0.62rem;
+  border: 1px solid #f3c1c1;
+  border-radius: 10px;
+  background: #fffafa;
+}
+
+.issue-item strong,
+.issue-item span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.issue-item strong {
+  font-size: 0.78rem;
+  letter-spacing: 0.01em;
 }
 
 .error-banner,
@@ -1166,6 +1200,10 @@ button:hover {
 
   .inspector dt {
     margin-top: 0.2rem;
+  }
+
+  .inspector dd {
+    margin-left: 0;
   }
 }
 
