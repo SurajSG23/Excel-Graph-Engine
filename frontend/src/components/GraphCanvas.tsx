@@ -29,7 +29,10 @@ const nodeTypes = {
   sheetGroup: SheetGroupNode,
 };
 
-type FlowNode = Node<FlowCellData> | Node<FlowRoleGroupData> | Node<FlowSheetGroupData>;
+type FlowNode =
+  | Node<FlowCellData>
+  | Node<FlowRoleGroupData>
+  | Node<FlowSheetGroupData>;
 type FlowEdge = Edge;
 
 export function GraphCanvas() {
@@ -38,12 +41,16 @@ export function GraphCanvas() {
   const selectedFile = useWorkbookStore((s) => s.selectedFile);
   const selectedSheet = useWorkbookStore((s) => s.selectedSheet);
   const searchText = useWorkbookStore((s) => s.searchText);
-  const showZeroDependencyNodes = useWorkbookStore((s) => s.showZeroDependencyNodes);
+  const showZeroDependencyNodes = useWorkbookStore(
+    (s) => s.showZeroDependencyNodes,
+  );
   const setSelectedNode = useWorkbookStore((s) => s.setSelectedNode);
   const applyOperations = useWorkbookStore((s) => s.applyOperations);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
-  const [reactFlowInstance, setReactFlowInstance] =
-    useState<ReactFlowInstance<FlowNode, FlowEdge> | null>(null);
+  const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance<
+    FlowNode,
+    FlowEdge
+  > | null>(null);
   const lastFitKey = useRef<string>("");
 
   const filtered = useMemo(() => {
@@ -57,7 +64,9 @@ export function GraphCanvas() {
     const sheetNodes =
       selectedSheet === "ALL"
         ? byFile
-        : byFile.filter((node) => `${node.fileName}::${node.sheet}` === selectedSheet);
+        : byFile.filter(
+            (node) => `${node.fileName}::${node.sheet}` === selectedSheet,
+          );
 
     const query = searchText.trim().toLowerCase();
     const queryFilteredNodes = query
@@ -71,7 +80,8 @@ export function GraphCanvas() {
 
     const candidateIdSet = new Set(queryFilteredNodes.map((node) => node.id));
     const candidateEdges = workbook.edges.filter(
-      (edge) => candidateIdSet.has(edge.source) && candidateIdSet.has(edge.target),
+      (edge) =>
+        candidateIdSet.has(edge.source) && candidateIdSet.has(edge.target),
     );
 
     const connectedNodeIds = new Set<string>();
@@ -90,14 +100,25 @@ export function GraphCanvas() {
     );
 
     return { nodes: visibleNodes, edges: visibleEdges };
-  }, [searchText, selectedFile, selectedSheet, showZeroDependencyNodes, workbook]);
+  }, [
+    searchText,
+    selectedFile,
+    selectedSheet,
+    showZeroDependencyNodes,
+    workbook,
+  ]);
 
   const activeNodeId = selectedNodeId;
 
   const highlight = useMemo(() => {
     if (!activeNodeId || !workbook) return new Set<string>();
-    const selectedNode = workbook.nodes.find((node) => node.id === activeNodeId);
-    return new Set<string>([activeNodeId, ...(selectedNode?.dependencies ?? [])]);
+    const selectedNode = workbook.nodes.find(
+      (node) => node.id === activeNodeId,
+    );
+    return new Set<string>([
+      activeNodeId,
+      ...(selectedNode?.dependencies ?? []),
+    ]);
   }, [activeNodeId, workbook]);
 
   const traversal = useMemo(() => {
@@ -137,7 +158,8 @@ export function GraphCanvas() {
   }, [workbook]);
 
   const nodeFileMap = useMemo(
-    () => new Map((workbook?.nodes ?? []).map((node) => [node.id, node.fileName])),
+    () =>
+      new Map((workbook?.nodes ?? []).map((node) => [node.id, node.fileName])),
     [workbook],
   );
 
@@ -151,7 +173,7 @@ export function GraphCanvas() {
         errorNodeIds: issueSummary.errorNodeIds,
         circularNodeIds: issueSummary.circularNodeIds,
         selectedFile,
-        selectedSheet
+        selectedSheet,
       }),
     [
       filtered.nodes,
@@ -163,13 +185,13 @@ export function GraphCanvas() {
       issueSummary.errorNodeIds,
       issueSummary.circularNodeIds,
       selectedFile,
-      selectedSheet
+      selectedSheet,
     ],
   );
 
   const sheetGroups = useMemo(
     () => flowNodes.filter((node) => node.type === "sheetGroup"),
-    [flowNodes]
+    [flowNodes],
   );
 
   const flowEdges = useMemo(
@@ -184,15 +206,19 @@ export function GraphCanvas() {
     [filtered.edges, highlight, nodeFileMap, selectedNodeId, hoveredNodeId],
   );
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(flowNodes as FlowNode[]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>(flowEdges as FlowEdge[]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(
+    flowNodes as FlowNode[],
+  );
+  const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>(
+    flowEdges as FlowEdge[],
+  );
 
   const stats = useMemo(
     () => ({
       nodeCount: filtered.nodes.length,
-      edgeCount: filtered.edges.length
+      edgeCount: filtered.edges.length,
     }),
-    [filtered.nodes.length, filtered.edges.length]
+    [filtered.nodes.length, filtered.edges.length],
   );
 
   useEffect(() => {
@@ -279,7 +305,9 @@ export function GraphCanvas() {
             return;
           }
 
-          const source = workbook.nodes.find((node) => node.id === draggedNode.id);
+          const source = workbook.nodes.find(
+            (node) => node.id === draggedNode.id,
+          );
           if (!source) {
             return;
           }
@@ -292,12 +320,19 @@ export function GraphCanvas() {
           let targetGroup: Node | undefined;
           for (const group of sheetGroups) {
             const groupWidth = Number(group.style?.width ?? group.width ?? 0);
-            const groupHeight = Number(group.style?.height ?? group.height ?? 0);
+            const groupHeight = Number(
+              group.style?.height ?? group.height ?? 0,
+            );
             const minX = group.position.x;
             const minY = group.position.y;
             const maxX = minX + groupWidth;
             const maxY = minY + groupHeight;
-            if (centerX >= minX && centerX <= maxX && centerY >= minY && centerY <= maxY) {
+            if (
+              centerX >= minX &&
+              centerX <= maxX &&
+              centerY >= minY &&
+              centerY <= maxY
+            ) {
               targetGroup = group;
               break;
             }
@@ -307,7 +342,9 @@ export function GraphCanvas() {
             return;
           }
 
-          const targetData = targetGroup.data as { fileName?: string; sheet?: string } | undefined;
+          const targetData = targetGroup.data as
+            | { fileName?: string; sheet?: string }
+            | undefined;
           const targetFileName = targetData?.fileName;
           const targetSheet = targetData?.sheet;
 
@@ -315,7 +352,10 @@ export function GraphCanvas() {
             return;
           }
 
-          if (source.fileName === targetFileName && source.sheet === targetSheet) {
+          if (
+            source.fileName === targetFileName &&
+            source.sheet === targetSheet
+          ) {
             return;
           }
 
@@ -326,10 +366,10 @@ export function GraphCanvas() {
                 fromNodeId: source.id,
                 toFileName: targetFileName,
                 toSheet: targetSheet,
-                toCell: source.cell
-              }
+                toCell: source.cell,
+              },
             ],
-            `Move ${source.id} to ${targetFileName}::${targetSheet}`
+            `Move ${source.id} to ${targetFileName}::${targetSheet}`,
           );
         }}
       >
@@ -340,7 +380,10 @@ export function GraphCanvas() {
           nodeBorderRadius={8}
           nodeColor={(node) => {
             if (node.type === "roleGroup") {
-              return String((node.data as { color?: string } | undefined)?.color ?? "#cbd5e1");
+              return String(
+                (node.data as { color?: string } | undefined)?.color ??
+                  "#cbd5e1",
+              );
             }
             if (node.type === "sheetGroup") {
               return "#eaf4ee";
@@ -393,7 +436,7 @@ export function GraphCanvas() {
           </div>
         </Panel>
         <Controls showInteractive={false} />
-        <Background gap={28} size={1.1} color="#d5e7dc" />
+        <Background id="dot-grid" gap={28} size={2} color="black" />
       </ReactFlow>
     </section>
   );

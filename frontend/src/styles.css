@@ -181,6 +181,10 @@ body {
   font-size: 0.95rem;
 }
 
+.upload-card summary {
+  font-weight: 700;
+}
+
 .upload-card p {
   margin: 0;
   font-size: 0.83rem;
@@ -491,10 +495,6 @@ button:hover {
 
 .canvas-shell .react-flow__node.dragging {
   cursor: grabbing;
-}
-
-.canvas-shell .react-flow__renderer {
-  background: #a0a0a0;
 }
 
 .canvas-shell .react-flow__attribution {
