@@ -428,8 +428,29 @@ function buildDagreLayout(
   const cols = Math.ceil(Math.sqrt(nodes.length));
   const rows = Math.ceil(nodes.length / cols);
 
-  const cellWidth = NODE_WIDTH + 90;
-  const cellHeight = NODE_HEIGHT + 90;
+  const maxNodeWidth = Math.max(
+    NODE_WIDTH,
+    ...nodes.map((node) => {
+      if (isGroupedNode(node)) {
+        return 260;
+      }
+
+      return node.fileRole === "output" ? 170 : NODE_WIDTH;
+    })
+  );
+  const maxNodeHeight = Math.max(
+    NODE_HEIGHT,
+    ...nodes.map((node) => {
+      if (isGroupedNode(node)) {
+        return 116;
+      }
+
+      return node.fileRole === "output" ? 92 : NODE_HEIGHT;
+    })
+  );
+
+  const cellWidth = maxNodeWidth + 90;
+  const cellHeight = maxNodeHeight + 90;
 
   nodes.forEach((node, index) => {
     const row = Math.floor(index / cols);
