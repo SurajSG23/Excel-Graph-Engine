@@ -1,6 +1,7 @@
 ﻿import dagre from "dagre";
 import { Edge, MarkerType, Node } from "@xyflow/react";
 import { CellValue, GraphEdge, GraphNode, WorkbookRole } from "../types/workbook";
+import { GraphViewNode, isGroupedNode } from "./formulaGrouping";
 
 const SHEET_COLORS = ["#16a34a", "#2563eb", "#9333ea", "#ea580c", "#0891b2", "#ca8a04", "#be123c"];
 const ROLE_COLORS = {
@@ -42,6 +43,24 @@ export interface FlowCellData {
   isDimmed: boolean;
   isHovered: boolean;
   showExtra: boolean;
+}
+
+export interface FlowFormulaGroupData {
+  [key: string]: unknown;
+  id: string;
+  fileName: string;
+  sheet: string;
+  formulaTemplate: string;
+  inputCount: number;
+  outputCount: number;
+  memberCount: number;
+  dependencies: string[];
+  isSelected: boolean;
+  isHighlighted: boolean;
+  isUpstream: boolean;
+  isDownstream: boolean;
+  isDimmed: boolean;
+  roleColor: string;
 }
 
 export interface FlowSheetGroupData {
@@ -109,10 +128,10 @@ function hashSheetColor(sheet: string): string {
 }
 
 export function toFlowNodes(
-  graphNodes: GraphNode[],
+  graphNodes: GraphViewNode[],
   graphEdges: GraphEdge[],
   context: FlowBuildContext
-): Array<Node<FlowCellData> | Node<FlowSheetGroupData> | Node<FlowRoleGroupData>> {
+): Array<Node<FlowCellData> | Node<FlowFormulaGroupData> | Node<FlowSheetGroupData> | Node<FlowRoleGroupData>> {
   const indegree = new Map<string, number>();
   const outdegree = new Map<string, number>();
 
@@ -168,7 +187,7 @@ export function toFlowNodes(
     zIndex: -1
   }));
 
-  const cellNodes: Array<Node<FlowCellData>> = graphNodes.map((node) => {
+  const viewNodes: Array<Node<FlowCellData> | Node<FlowFormulaGroupData>> = graphNodes.map((node) => {
     const color = hashSheetColor(node.sheet);
     const isSelected = context.selectedNodeId === node.id;
     const isHighlighted = context.highlight.has(node.id);
@@ -185,6 +204,34 @@ export function toFlowNodes(
     }
     if (isError) {
       role = isCircular ? "circular" : "error";
+    }
+
+    if (isGroupedNode(node)) {
+      return {
+        id: node.id,
+        type: "formulaGroup",
+        data: {
+          id: node.id,
+          fileName: node.fileName,
+          sheet: node.sheet,
+          formulaTemplate: node.formulaTemplate,
+          inputCount: node.inputs.length,
+          outputCount: node.outputs.length,
+          memberCount: node.memberNodeIds.length,
+          dependencies: node.dependencies,
+          isSelected,
+          isHighlighted,
+          isUpstream: context.upstream.has(node.id),
+          isDownstream: context.downstream.has(node.id),
+          isDimmed,
+          roleColor: ROLE_COLORS[role]
+        },
+        position: layout.positions.get(node.id) ?? { x: 0, y: 0 },
+        style: {
+          width: 260,
+          height: 116
+        }
+      } satisfies Node<FlowFormulaGroupData>;
     }
 
     return {
@@ -218,18 +265,18 @@ export function toFlowNodes(
     } satisfies Node<FlowCellData>;
   });
 
-  return [...roleGroups, ...sheetGroups, ...cellNodes];
+  return [...roleGroups, ...sheetGroups, ...viewNodes];
 }
 
 function layoutBySheetDirectional(
-  graphNodes: GraphNode[],
+  graphNodes: GraphViewNode[],
   graphEdges: GraphEdge[],
   selectedSheet: string | "ALL"
 ): LayoutResult {
   const positions = new Map<string, { x: number; y: number }>();
   const sheetBounds = new Map<string, { fileName: string; sheet: string; role: WorkbookRole | "other"; x: number; y: number; width: number; height: number; nodeCount: number }>();
 
-  const groupedBySheet = new Map<string, GraphNode[]>();
+  const groupedBySheet = new Map<string, GraphViewNode[]>();
   for (const node of graphNodes) {
     const groupKey = `${node.fileName}::${node.sheet}`;
     if (!groupedBySheet.has(groupKey)) {
@@ -369,7 +416,7 @@ function layoutBySheetDirectional(
 }
 
 function buildDagreLayout(
-  nodes: GraphNode[],
+  nodes: GraphViewNode[],
   edges: GraphEdge[]
 ): { positions: Map<string, { x: number; y: number }>; width: number; height: number; nodeCount: number } {
   const positions = new Map<string, { x: number; y: number }>();

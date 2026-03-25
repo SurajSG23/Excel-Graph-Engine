@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useWorkbookStore } from "../store/workbookStore";
+import { isGroupedNode, projectGraphForFormulaGrouping } from "../utils/formulaGrouping";
 
 function formatNodeValue(value: string | number | boolean | undefined): string {
   if (value === undefined) {
@@ -16,22 +17,60 @@ function formatNodeValue(value: string | number | boolean | undefined): string {
 export function NodeInspector() {
   const workbook = useWorkbookStore((s) => s.workbook);
   const selectedNodeId = useWorkbookStore((s) => s.selectedNodeId);
+  const groupSimilarFormulas = useWorkbookStore((s) => s.groupSimilarFormulas);
   const applyUpdate = useWorkbookStore((s) => s.applyUpdate);
 
-  const node = useMemo(
-    () => workbook?.nodes.find((item) => item.id === selectedNodeId),
-    [selectedNodeId, workbook]
+  const projection = useMemo(
+    () => projectGraphForFormulaGrouping(workbook, groupSimilarFormulas),
+    [workbook, groupSimilarFormulas]
+  );
+
+  const workbookNodeById = useMemo(
+    () => new Map((workbook?.nodes ?? []).map((item) => [item.id, item])),
+    [workbook]
+  );
+
+  const node = useMemo(() => projection.nodes.find((item) => item.id === selectedNodeId), [selectedNodeId, projection.nodes]);
+
+  const groupMembers = useMemo(
+    () =>
+      node && isGroupedNode(node)
+        ? node.memberNodeIds
+            .map((id) => workbookNodeById.get(id))
+            .filter((item): item is NonNullable<typeof item> => Boolean(item))
+        : [],
+    [node, workbookNodeById]
   );
 
   const [formula, setFormula] = useState("");
 
   useEffect(() => {
-    setFormula(node?.formula ?? "");
-  }, [node]);
+    if (!node) {
+      setFormula("");
+      return;
+    }
+
+    if (isGroupedNode(node)) {
+      setFormula(groupMembers[0]?.formula ?? "");
+      return;
+    }
+
+    setFormula(node.formula ?? "");
+  }, [node, groupMembers]);
 
   const onSubmit = async (event: FormEvent): Promise<void> => {
     event.preventDefault();
     if (!node) return;
+
+    if (isGroupedNode(node)) {
+      const updates = node.memberNodeIds.map((id) => ({ id, formula }));
+      await applyUpdate(
+        updates,
+        `Edit grouped formula (${node.memberNodeIds.length} cells)`
+      );
+      return;
+    }
+
     await applyUpdate([{ id: node.id, formula }], `Edit ${node.id}`);
   };
 
@@ -58,9 +97,17 @@ export function NodeInspector() {
           <dt>Sheet</dt>
           <dd>{node.sheet}</dd>
           <dt>Cell</dt>
-          <dd>{node.cell}</dd>
+          <dd>{isGroupedNode(node) ? "Grouped" : node.cell}</dd>
           <dt>Computed Value</dt>
-          <dd>{formatNodeValue(node.value)}</dd>
+          <dd>{isGroupedNode(node) ? "Group node (multiple outputs)" : formatNodeValue(node.value)}</dd>
+          {isGroupedNode(node) && (
+            <>
+              <dt>Formula Template</dt>
+              <dd>{node.formulaTemplate}</dd>
+              <dt>Group Size</dt>
+              <dd>{node.memberNodeIds.length} formula cells</dd>
+            </>
+          )}
           <dt>Dependencies</dt>
           <dd>{node.dependencies.length > 0 ? node.dependencies.join(", ") : "None"}</dd>
           <dt>Reference Details</dt>
@@ -71,6 +118,18 @@ export function NodeInspector() {
                   .join(", ")
               : "None"}
           </dd>
+          {isGroupedNode(node) && (
+            <>
+              <dt>Outputs</dt>
+              <dd>{node.outputs.join(", ")}</dd>
+              <dt>Input→Output map</dt>
+              <dd>
+                {node.inputOutputMapping
+                  .map((entry) => `${entry.outputNodeId} <= [${entry.inputNodeIds.join(", ")}]`)
+                  .join("; ")}
+              </dd>
+            </>
+          )}
         </dl>
 
         <form onSubmit={onSubmit} className="formula-form">
@@ -82,7 +141,7 @@ export function NodeInspector() {
             placeholder="=A1+B1"
             rows={4}
           />
-          <button type="submit">Apply + Recompute</button>
+          <button type="submit">{isGroupedNode(node) ? "Apply To Group + Recompute" : "Apply + Recompute"}</button>
         </form>
 
         {/* Add/move/delete/copy-paste controls removed per request */}

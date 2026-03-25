@@ -10,12 +10,14 @@ export function TopBar() {
   const showZeroDependencyNodes = useWorkbookStore(
     (s) => s.showZeroDependencyNodes,
   );
+  const groupSimilarFormulas = useWorkbookStore((s) => s.groupSimilarFormulas);
   const setSelectedSheet = useWorkbookStore((s) => s.setSelectedSheet);
   const setSelectedFile = useWorkbookStore((s) => s.setSelectedFile);
   const setSearchText = useWorkbookStore((s) => s.setSearchText);
   const setShowZeroDependencyNodes = useWorkbookStore(
     (s) => s.setShowZeroDependencyNodes,
   );
+  const setGroupSimilarFormulas = useWorkbookStore((s) => s.setGroupSimilarFormulas);
   const undo = useWorkbookStore((s) => s.undo);
   const redo = useWorkbookStore((s) => s.redo);
   const triggerExport = useWorkbookStore((s) => s.triggerExport);
@@ -73,6 +75,16 @@ export function TopBar() {
               onChange={(e) => setShowZeroDependencyNodes(e.target.checked)}
             />
             <span className="toggle-text">Show isolated nodes</span>
+          </label>
+
+          <label className="toggle-row">
+            <input
+              className="toggle-input"
+              type="checkbox"
+              checked={groupSimilarFormulas}
+              onChange={(e) => setGroupSimilarFormulas(e.target.checked)}
+            />
+            <span className="toggle-text">Group Similar Formulas</span>
           </label>
         </div>
 

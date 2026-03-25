@@ -588,6 +588,9 @@ button:hover {
 .legend-dot.error {
   background: #dc2626;
 }
+.legend-dot.group {
+  background: #0f766e;
+}
 
 .legend-line {
   width: 12px;
@@ -851,6 +854,92 @@ button:hover {
   border-radius: 999px;
   border: 1px solid #fff;
   background: var(--sheet-color);
+}
+
+.formula-group-node {
+  --role-color: #0f766e;
+  width: 100%;
+  height: 100%;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--role-color), #d1d5db 42%);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--role-color), #ffffff 89%), #f8fafc),
+    #ffffff;
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.1);
+  padding: 0.5rem 0.62rem;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 0.28rem;
+  transition: box-shadow 120ms ease, border-color 120ms ease, opacity 150ms ease;
+}
+
+.formula-group-node.is-dimmed {
+  opacity: 0.25;
+}
+
+.formula-group-node.is-highlighted {
+  border-color: color-mix(in srgb, var(--role-color), #0f172a 25%);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--role-color), #ffffff 64%),
+    0 12px 22px rgba(15, 23, 42, 0.16);
+}
+
+.formula-group-node.is-selected {
+  border-color: #111827;
+  box-shadow:
+    0 0 0 3px rgba(17, 24, 39, 0.26),
+    0 12px 24px rgba(15, 23, 42, 0.18);
+}
+
+.formula-group-node header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.formula-group-node header strong {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.formula-group-node header span {
+  font-size: 0.62rem;
+  color: #334155;
+  border: 1px solid #c9ddd0;
+  border-radius: 999px;
+  padding: 0.1rem 0.35rem;
+  background: #ffffff;
+}
+
+.formula-group-template {
+  margin: 0;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.formula-group-node footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.25rem;
+}
+
+.formula-group-node footer span {
+  font-size: 0.58rem;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: #155e75;
+  background: #cffafe;
+  border-radius: 999px;
+  padding: 0.08rem 0.34rem;
 }
 
 .canvas-empty {

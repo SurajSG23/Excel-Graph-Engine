@@ -17,6 +17,7 @@ interface WorkbookState {
   selectedSheet: string | "ALL";
   searchText: string;
   showZeroDependencyNodes: boolean;
+  groupSimilarFormulas: boolean;
   loading: boolean;
   error: string | null;
   uploadFiles: (payload: {
@@ -30,6 +31,7 @@ interface WorkbookState {
   setSelectedSheet: (sheet: string | "ALL") => void;
   setSearchText: (value: string) => void;
   setShowZeroDependencyNodes: (value: boolean) => void;
+  setGroupSimilarFormulas: (value: boolean) => void;
   applyUpdate: (updates: NodeUpdate[], label?: string) => Promise<void>;
   applyOperations: (operations: WorkbookOperation[], label?: string) => Promise<void>;
   undo: () => Promise<void>;
@@ -45,6 +47,7 @@ export const useWorkbookStore = create<WorkbookState>((set, get) => ({
   selectedSheet: "ALL",
   searchText: "",
   showZeroDependencyNodes: true,
+  groupSimilarFormulas: false,
   loading: false,
   error: null,
 
@@ -96,6 +99,10 @@ export const useWorkbookStore = create<WorkbookState>((set, get) => ({
 
   setShowZeroDependencyNodes(value) {
     set({ showZeroDependencyNodes: value });
+  },
+
+  setGroupSimilarFormulas(value) {
+    set({ groupSimilarFormulas: value });
   },
 
   async applyUpdate(updates, label) {

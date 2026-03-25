@@ -16,6 +16,7 @@ import { useWorkbookStore } from "../store/workbookStore";
 import {
   buildTraversalSets,
   FlowCellData,
+  FlowFormulaGroupData,
   FlowRoleGroupData,
   FlowSheetGroupData,
   toFlowEdges,
@@ -23,14 +24,20 @@ import {
 } from "../utils/graphLayout";
 import { CellNode } from "./CellNode";
 import { SheetGroupNode } from "./SheetGroupNode";
+import { RoleGroupNode } from "./RoleGroupNode";
+import { FormulaGroupNode } from "./FormulaGroupNode";
+import { isGroupedNode, projectGraphForFormulaGrouping } from "../utils/formulaGrouping";
 
 const nodeTypes = {
   cellNode: CellNode,
+  formulaGroup: FormulaGroupNode,
+  roleGroup: RoleGroupNode,
   sheetGroup: SheetGroupNode,
 };
 
 type FlowNode =
   | Node<FlowCellData>
+  | Node<FlowFormulaGroupData>
   | Node<FlowRoleGroupData>
   | Node<FlowSheetGroupData>;
 type FlowEdge = Edge;
@@ -44,6 +51,7 @@ export function GraphCanvas() {
   const showZeroDependencyNodes = useWorkbookStore(
     (s) => s.showZeroDependencyNodes,
   );
+  const groupSimilarFormulas = useWorkbookStore((s) => s.groupSimilarFormulas);
   const setSelectedNode = useWorkbookStore((s) => s.setSelectedNode);
   const applyOperations = useWorkbookStore((s) => s.applyOperations);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
@@ -53,13 +61,18 @@ export function GraphCanvas() {
   > | null>(null);
   const lastFitKey = useRef<string>("");
 
+  const projectedGraph = useMemo(
+    () => projectGraphForFormulaGrouping(workbook, groupSimilarFormulas),
+    [workbook, groupSimilarFormulas],
+  );
+
   const filtered = useMemo(() => {
     if (!workbook) return { nodes: [], edges: [] };
 
     const byFile =
       selectedFile === "ALL"
-        ? workbook.nodes
-        : workbook.nodes.filter((node) => node.fileName === selectedFile);
+        ? projectedGraph.nodes
+        : projectedGraph.nodes.filter((node) => node.fileName === selectedFile);
 
     const sheetNodes =
       selectedSheet === "ALL"
@@ -74,12 +87,13 @@ export function GraphCanvas() {
           (node) =>
             node.id.toLowerCase().includes(query) ||
             node.cell.toLowerCase().includes(query) ||
-            (node.formula ?? "").toLowerCase().includes(query),
+            (node.formula ?? "").toLowerCase().includes(query) ||
+            (isGroupedNode(node) && node.formulaTemplate.toLowerCase().includes(query)),
         )
       : sheetNodes;
 
     const candidateIdSet = new Set(queryFilteredNodes.map((node) => node.id));
-    const candidateEdges = workbook.edges.filter(
+    const candidateEdges = projectedGraph.edges.filter(
       (edge) =>
         candidateIdSet.has(edge.source) && candidateIdSet.has(edge.target),
     );
@@ -101,6 +115,9 @@ export function GraphCanvas() {
 
     return { nodes: visibleNodes, edges: visibleEdges };
   }, [
+    groupSimilarFormulas,
+    projectedGraph.edges,
+    projectedGraph.nodes,
     searchText,
     selectedFile,
     selectedSheet,
@@ -112,21 +129,21 @@ export function GraphCanvas() {
 
   const highlight = useMemo(() => {
     if (!activeNodeId || !workbook) return new Set<string>();
-    const selectedNode = workbook.nodes.find(
+    const selectedNode = projectedGraph.nodes.find(
       (node) => node.id === activeNodeId,
     );
     return new Set<string>([
       activeNodeId,
       ...(selectedNode?.dependencies ?? []),
     ]);
-  }, [activeNodeId, workbook]);
+  }, [activeNodeId, projectedGraph.nodes, workbook]);
 
   const traversal = useMemo(() => {
     if (!activeNodeId || !workbook) {
       return { upstream: new Set<string>(), downstream: new Set<string>() };
     }
-    return buildTraversalSets(activeNodeId, workbook.edges);
-  }, [activeNodeId, workbook]);
+    return buildTraversalSets(activeNodeId, projectedGraph.edges);
+  }, [activeNodeId, projectedGraph.edges, workbook]);
 
   const issueSummary = useMemo(() => {
     const allIssues = workbook?.validationIssues ?? [];
@@ -135,16 +152,17 @@ export function GraphCanvas() {
 
     for (const issue of allIssues) {
       if (issue.nodeId) {
-        errorNodeIds.add(issue.nodeId);
+        errorNodeIds.add(projectedGraph.nodeToGroupId.get(issue.nodeId) ?? issue.nodeId);
       }
       for (const related of issue.relatedNodeIds ?? []) {
-        errorNodeIds.add(related);
+        const mapped = projectedGraph.nodeToGroupId.get(related) ?? related;
+        errorNodeIds.add(mapped);
         if (issue.type === "CIRCULAR_DEPENDENCY") {
-          circularNodeIds.add(related);
+          circularNodeIds.add(mapped);
         }
       }
       if (issue.type === "CIRCULAR_DEPENDENCY" && issue.nodeId) {
-        circularNodeIds.add(issue.nodeId);
+        circularNodeIds.add(projectedGraph.nodeToGroupId.get(issue.nodeId) ?? issue.nodeId);
       }
     }
 
@@ -155,12 +173,12 @@ export function GraphCanvas() {
       circularCount: allIssues.filter((i) => i.type === "CIRCULAR_DEPENDENCY")
         .length,
     };
-  }, [workbook]);
+  }, [projectedGraph.nodeToGroupId, workbook]);
 
   const nodeFileMap = useMemo(
     () =>
-      new Map((workbook?.nodes ?? []).map((node) => [node.id, node.fileName])),
-    [workbook],
+      new Map(projectedGraph.nodes.map((node) => [node.id, node.fileName])),
+    [projectedGraph.nodes],
   );
 
   const flowNodes = useMemo(
@@ -230,11 +248,29 @@ export function GraphCanvas() {
   }, [flowEdges, setEdges]);
 
   useEffect(() => {
+    if (!selectedNodeId) {
+      return;
+    }
+
+    if (groupSimilarFormulas) {
+      const mapped = projectedGraph.nodeToGroupId.get(selectedNodeId);
+      if (mapped && mapped !== selectedNodeId) {
+        setSelectedNode(mapped);
+      }
+      return;
+    }
+
+    if (selectedNodeId.startsWith("group:")) {
+      setSelectedNode(null);
+    }
+  }, [groupSimilarFormulas, projectedGraph.nodeToGroupId, selectedNodeId, setSelectedNode]);
+
+  useEffect(() => {
     if (!workbook) {
       return;
     }
 
-    const fitKey = `${selectedFile}|${selectedSheet}|${searchText}|${showZeroDependencyNodes}|${filtered.nodes.length}|${filtered.edges.length}`;
+    const fitKey = `${selectedFile}|${selectedSheet}|${searchText}|${showZeroDependencyNodes}|${groupSimilarFormulas}|${filtered.nodes.length}|${filtered.edges.length}`;
     if (fitKey === lastFitKey.current) {
       return;
     }
@@ -256,6 +292,7 @@ export function GraphCanvas() {
     selectedSheet,
     searchText,
     showZeroDependencyNodes,
+    groupSimilarFormulas,
     filtered.nodes.length,
     filtered.edges.length,
   ]);
@@ -285,13 +322,13 @@ export function GraphCanvas() {
         maxZoom={1.8}
         onInit={setReactFlowInstance}
         onNodeClick={(_, node) => {
-          if (node.type !== "cellNode") {
+          if (node.type !== "cellNode" && node.type !== "formulaGroup") {
             return;
           }
           setSelectedNode(node.id);
         }}
         onNodeMouseEnter={(_, node) => {
-          if (node.type === "cellNode") {
+          if (node.type === "cellNode" || node.type === "formulaGroup") {
             setHoveredNodeId(node.id);
           }
         }}
@@ -426,6 +463,11 @@ export function GraphCanvas() {
               <li>
                 <i className="legend-dot error" /> Error/Cycle
               </li>
+              {groupSimilarFormulas && (
+                <li>
+                  <i className="legend-dot group" /> Grouped formula
+                </li>
+              )}
               <li>
                 <i className="legend-line same" /> Same-file
               </li>
