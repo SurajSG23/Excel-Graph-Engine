@@ -133,9 +133,23 @@ export class WorkbookMutationService {
           const role = op.fileRole ?? files.find((file) => file.fileName === op.fileName)?.role ?? "other";
           const created: GraphNode = {
             id,
+            nodeType: "input",
             fileName: op.fileName,
             fileRole: role,
             sheet: normalizeSheetName(op.sheet),
+            range: normalizeCellAddress(op.cell),
+            shape: { rows: 1, cols: 1, size: 1 },
+            operation: "ReadRange",
+            inputs: [],
+            output: {
+              file: op.fileName,
+              sheet: normalizeSheetName(op.sheet),
+              range: normalizeCellAddress(op.cell)
+            },
+            rangeValues:
+              typeof op.value === "number" || typeof op.value === "string" || typeof op.value === "boolean"
+                ? [op.value]
+                : [],
             cell: normalizeCellAddress(op.cell),
             formula: op.formula,
             value: op.value,
@@ -549,6 +563,8 @@ export class WorkbookMutationService {
         fileName: targetFileName,
         fileRole: role,
         sheet: targetSheet,
+        range: cell,
+        shape: { rows: 1, cols: 1, size: 1 },
         cell,
         id
       };

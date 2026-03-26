@@ -30,7 +30,7 @@ function formatValue(value: string | number | boolean | undefined): string {
 
 export function CellNode({ data }: NodeProps<CellFlowNode>) {
   const nodeData = data;
-  const roleLabel = nodeData.role === "computed" ? "Computed" :
+  const roleLabel = nodeData.role === "formula" ? "Formula" :
     nodeData.role === "output" ? "Output" :
       nodeData.role === "error" ? "Error" :
         nodeData.role === "circular" ? "Circular" : "Input";
@@ -66,6 +66,7 @@ export function CellNode({ data }: NodeProps<CellFlowNode>) {
       </header>
 
       <div className="cell-node-role">{roleLabel}</div>
+      {nodeData.operation && <div className="cell-node-role">{nodeData.operation}</div>}
 
       <div className="cell-node-value">{formatValue(nodeData.value)}</div>
 
@@ -78,6 +79,8 @@ export function CellNode({ data }: NodeProps<CellFlowNode>) {
       <div className="cell-node-tooltip">
         <p><strong>{nodeData.id}</strong></p>
         <p>File: {nodeData.fileName}</p>
+        <p>Range: {nodeData.range}</p>
+        <p>Type: {nodeData.nodeType}</p>
         <p>Value: {formatValue(nodeData.value) || "available"}</p>
         <p>Formula: {nodeData.formula ?? "(none)"}</p>
         <p>Dependencies: {nodeData.dependencies.length ? nodeData.dependencies.join(", ") : "None"}</p>

@@ -179,6 +179,16 @@ export class WorkbookController {
 
         if (typeof update.formula === "string") {
           target.formula = update.formula.trim() === "" ? undefined : update.formula;
+          if (target.nodeType === "formula" && target.formulaByCell) {
+            const nextFormula = target.formula;
+            const nextMap: Record<string, string> = {};
+            for (const key of Object.keys(target.formulaByCell)) {
+              if (nextFormula) {
+                nextMap[key] = nextFormula;
+              }
+            }
+            target.formulaByCell = nextMap;
+          }
           changedNodeIds.push(target.id);
         }
 

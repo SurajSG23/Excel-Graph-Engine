@@ -1,4 +1,5 @@
 import { GraphNode, ValidationIssue } from "../models/graph";
+import { parseRangeRef } from "../utils/cellUtils";
 
 export class ValidationService {
   validate(
@@ -11,6 +12,74 @@ export class ValidationService {
     const sheetSet = new Set(files.flatMap((file) => file.sheets.map((sheet) => `${file.fileName}::${sheet}`)));
 
     for (const node of nodes) {
+      if (!parseRangeRef(node.range)) {
+        issues.push({
+          type: "INVALID_RANGE",
+          nodeId: node.id,
+          message: `Invalid range '${node.range}' on node ${node.id}`,
+          relatedNodeIds: [node.id]
+        });
+      }
+
+      if (node.nodeType === "formula") {
+        if (node.formula && !node.formula.startsWith("=")) {
+          issues.push({
+            type: "INVALID_FORMULA",
+            nodeId: node.id,
+            message: `Invalid formula in ${node.id}. Formulas must start with '='.`
+          });
+        }
+
+        if (node.shape.size > 0 && node.rangeValues && node.rangeValues.length > 0 && node.rangeValues.length !== node.shape.size) {
+          issues.push({
+            type: "MISMATCHED_RANGE_SHAPE",
+            nodeId: node.id,
+            message: `Node ${node.id} produced ${node.rangeValues.length} values for shape ${node.shape.rows}x${node.shape.cols}.`,
+            relatedNodeIds: [node.id]
+          });
+        }
+      }
+
+      for (const input of node.inputs) {
+        if (!parseRangeRef(input.range)) {
+          issues.push({
+            type: "INVALID_RANGE",
+            nodeId: node.id,
+            message: `Node ${node.id} has invalid input range '${input.range}'.`,
+            relatedNodeIds: [node.id]
+          });
+        }
+
+        if (fileSet.size > 0 && !fileSet.has(input.file)) {
+          issues.push({
+            type: "MISSING_REFERENCE",
+            nodeId: node.id,
+            message: `Node ${node.id} references missing workbook ${input.file}`,
+            relatedNodeIds: [node.id]
+          });
+        }
+
+        if (sheetSet.size > 0 && !sheetSet.has(`${input.file}::${input.sheet}`)) {
+          issues.push({
+            type: "MISSING_REFERENCE",
+            nodeId: node.id,
+            message: `Node ${node.id} references missing sheet ${input.sheet} in ${input.file}`,
+            relatedNodeIds: [node.id]
+          });
+        }
+      }
+
+      for (const dep of node.dependencies) {
+        if (!nodeSet.has(dep)) {
+          issues.push({
+            type: "MISSING_REFERENCE",
+            nodeId: node.id,
+            message: `Node ${node.id} depends on missing node ${dep}`,
+            relatedNodeIds: [node.id, dep]
+          });
+        }
+      }
+
       for (const ref of node.referenceDetails) {
         if (!ref.external) {
           continue;
@@ -35,25 +104,10 @@ export class ValidationService {
           });
         }
       }
+    }
 
-      for (const dep of node.dependencies) {
-        if (!nodeSet.has(dep)) {
-          issues.push({
-            type: "MISSING_REFERENCE",
-            nodeId: node.id,
-            message: `Node ${node.id} references missing cell ${dep}`,
-            relatedNodeIds: [node.id, dep]
-          });
-        }
-      }
-
-      if (node.formula && !node.formula.startsWith("=")) {
-        issues.push({
-          type: "INVALID_FORMULA",
-          nodeId: node.id,
-          message: `Invalid formula in ${node.id}. Formulas must start with '='.`
-        });
-      }
+    for (const overlap of this.detectOverlappingWrites(nodes)) {
+      issues.push(overlap);
     }
 
     const circularPaths = this.detectCycles(nodes);
@@ -63,6 +117,46 @@ export class ValidationService {
         message: `Circular dependency detected: ${cycle.join(" -> ")}`,
         relatedNodeIds: cycle
       });
+    }
+
+    return issues;
+  }
+
+  private detectOverlappingWrites(nodes: GraphNode[]): ValidationIssue[] {
+    const issues: ValidationIssue[] = [];
+    const writers = nodes.filter((node) => node.nodeType === "formula" || node.nodeType === "output");
+
+    for (let i = 0; i < writers.length; i += 1) {
+      const left = writers[i];
+      const leftRange = parseRangeRef(left.range);
+      if (!leftRange) {
+        continue;
+      }
+
+      const leftSet = new Set(leftRange.cells.map((cell) => `${left.fileName}::${left.sheet}::${cell}`));
+      for (let j = i + 1; j < writers.length; j += 1) {
+        const right = writers[j];
+        if (left.fileName !== right.fileName || left.sheet !== right.sheet) {
+          continue;
+        }
+
+        const rightRange = parseRangeRef(right.range);
+        if (!rightRange) {
+          continue;
+        }
+
+        const intersects = rightRange.cells.some((cell) => leftSet.has(`${right.fileName}::${right.sheet}::${cell}`));
+        if (!intersects) {
+          continue;
+        }
+
+        issues.push({
+          type: "OVERLAPPING_WRITES",
+          nodeId: left.id,
+          message: `Overlapping write ranges detected between ${left.id} and ${right.id}.`,
+          relatedNodeIds: [left.id, right.id]
+        });
+      }
     }
 
     return issues;

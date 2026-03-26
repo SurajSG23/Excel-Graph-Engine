@@ -14,6 +14,8 @@ export interface GroupedGraphNode {
   fileRole: WorkbookRole;
   sheet: string;
   cell: string;
+  range: string;
+  operation?: string;
   formula?: string;
   formulaTemplate: string;
   formulaSignature: string;
@@ -302,6 +304,8 @@ export function projectGraphForFormulaGrouping(
       fileRole: anchor.fileRole,
       sheet: anchor.sheet,
       cell: anchor.cell,
+      range: anchor.range,
+      operation: anchor.operation,
       formula: templateBySignature.get(signature) ?? anchor.formula,
       formulaTemplate: templateBySignature.get(signature) ?? anchor.formula ?? "",
       formulaSignature: signature,

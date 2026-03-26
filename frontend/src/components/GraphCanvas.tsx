@@ -87,6 +87,8 @@ export function GraphCanvas() {
           (node) =>
             node.id.toLowerCase().includes(query) ||
             node.cell.toLowerCase().includes(query) ||
+            node.range.toLowerCase().includes(query) ||
+            (node.operation ?? "").toLowerCase().includes(query) ||
             (node.formula ?? "").toLowerCase().includes(query) ||
             (isGroupedNode(node) && node.formulaTemplate.toLowerCase().includes(query)),
         )
@@ -455,7 +457,7 @@ export function GraphCanvas() {
                 <i className="legend-dot input" /> Input
               </li>
               <li>
-                <i className="legend-dot computed" /> Computed
+                <i className="legend-dot computed" /> Formula
               </li>
               <li>
                 <i className="legend-dot output" /> Output

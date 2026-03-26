@@ -1004,33 +1004,209 @@ button:hover {
   min-width: 0;
 }
 
-.inspector dl {
-  margin: 0;
+.inspector {
   display: grid;
-  grid-template-columns: minmax(88px, 0.92fr) minmax(0, 1.58fr);
-  gap: 0.35rem 0.65rem;
-  font-size: 0.9rem;
+  gap: 0.75rem;
 }
 
-.inspector dt {
-  font-weight: 700;
+.inspector-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.8rem 0.85rem;
+  border: 1px solid #dbe7df;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f9fdfb, #ffffff);
 }
 
-.inspector dd {
+.inspector-hero h3 {
+  margin: 0.1rem 0 0.2rem;
+  font-size: 0.98rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.inspector-kicker {
   margin: 0;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+}
+
+.inspector-subtitle {
+  margin: 0;
+  font-size: 0.76rem;
+  color: #475569;
+  overflow-wrap: anywhere;
+}
+
+.inspector-badge {
+  flex: 0 0 auto;
+  padding: 0.18rem 0.48rem;
+  border-radius: 999px;
+  border: 1px solid;
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.inspector-badge.is-cell {
+  color: #065f46;
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+}
+
+.inspector-badge.is-group {
+  color: #155e75;
+  border-color: #a5f3fc;
+  background: #ecfeff;
+}
+
+.inspector-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.inspector-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.18rem 0.44rem;
+  border-radius: 999px;
+  border: 1px solid #d7e8dd;
+  background: #f8fcf9;
+  color: #334155;
+  font-size: 0.7rem;
+  font-family: "IBM Plex Mono", monospace;
   min-width: 0;
   overflow-wrap: anywhere;
-  word-break: break-word;
+}
+
+.inspector-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.inspector-summary-card {
+  border: 1px solid #dbe7df;
+  border-radius: 12px;
+  background: #f9fcfa;
+  padding: 0.52rem 0.6rem;
+  display: grid;
+  gap: 0.18rem;
+}
+
+.inspector-summary-card span {
+  font-size: 0.68rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.inspector-summary-card strong {
+  font-size: 0.92rem;
+  color: #0f172a;
+  overflow-wrap: anywhere;
+}
+
+.inspector-summary-card-accent {
+  background: linear-gradient(180deg, #ecfeff, #f8fcf9);
+  border-color: #a5f3fc;
+}
+
+.inspector-section {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.72rem 0.8rem;
+  border: 1px solid #e1e9e4;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.inspector-section h4 {
+  margin: 0;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #475569;
+}
+
+.inspector-code-block {
+  display: block;
+  margin: 0;
+  padding: 0.48rem 0.56rem;
+  border-radius: 10px;
+  border: 1px solid #d7e8dd;
+  background: #f8fcf9;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.74rem;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
-.inspector dt,
-.inspector dd {
-  align-self: start;
+.inspector-pill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
 }
 
-.inspector dd + dt {
-  margin-top: 0.2rem;
+.inspector-pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 0.14rem 0.42rem;
+  border-radius: 999px;
+  border: 1px solid #cfe2d6;
+  background: #f7fbf8;
+  color: #14532d;
+  font-size: 0.7rem;
+  font-family: "IBM Plex Mono", monospace;
+  overflow-wrap: anywhere;
+}
+
+.inspector-pill-output {
+  color: #1e3a8a;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.inspector-list-box {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.inspector-list-item,
+.inspector-mapping-row {
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #fafcff;
+  padding: 0.45rem 0.52rem;
+  font-size: 0.75rem;
+  color: #334155;
+  overflow-wrap: anywhere;
+}
+
+.inspector-mapping-row {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.inspector-mapping-row strong {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.76rem;
+  color: #0f172a;
+}
+
+.inspector-empty {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.78rem;
 }
 
 .formula-form {
@@ -1198,12 +1374,12 @@ button:hover {
     grid-template-columns: 1fr;
   }
 
-  .inspector dt {
-    margin-top: 0.2rem;
+  .inspector-summary-grid {
+    grid-template-columns: 1fr;
   }
 
-  .inspector dd {
-    margin-left: 0;
+  .inspector-hero {
+    flex-direction: column;
   }
 }
 

@@ -6,13 +6,13 @@ import { GraphViewNode, isGroupedNode } from "./formulaGrouping";
 const SHEET_COLORS = ["#16a34a", "#2563eb", "#9333ea", "#ea580c", "#0891b2", "#ca8a04", "#be123c"];
 const ROLE_COLORS = {
   input: "#2563eb",
-  computed: "#0f766e",
+  formula: "#0f766e",
   output: "#16a34a",
   error: "#dc2626",
   circular: "#b91c1c"
 } as const;
 
-type Role = "input" | "computed" | "output" | "error" | "circular";
+type Role = "input" | "formula" | "output" | "error" | "circular";
 
 const NODE_WIDTH = 150;
 const NODE_HEIGHT = 84;
@@ -26,9 +26,12 @@ const HANDLE_SLOT_COUNT = 4;
 export interface FlowCellData {
   [key: string]: unknown;
   label: string;
+  nodeType: "input" | "formula" | "output";
   id: string;
   fileName: string;
   sheet: string;
+  range: string;
+  operation?: string;
   value?: CellValue;
   formula?: string;
   color: string;
@@ -198,10 +201,7 @@ export function toFlowNodes(
     const hasSelection = Boolean(context.selectedNodeId);
     const isDimmed = hasSelection && !isHighlighted;
 
-    let role: Role = node.fileRole === "output" ? "output" : node.fileRole === "input" ? "input" : (node.formula ? "computed" : "input");
-    if (nodeOut === 0 && nodeIn > 0) {
-      role = "output";
-    }
+    let role: Role = node.nodeType === "formula" || node.nodeType === "group" ? "formula" : node.nodeType;
     if (isError) {
       role = isCircular ? "circular" : "error";
     }
@@ -239,9 +239,12 @@ export function toFlowNodes(
       type: "cellNode",
       data: {
         id: node.id,
-        label: `${node.cell}`,
+        label: node.range,
+        nodeType: node.nodeType,
         fileName: node.fileName,
         sheet: node.sheet,
+        range: node.range,
+        operation: node.operation,
         value: node.value,
         formula: node.formula,
         color,
@@ -435,7 +438,7 @@ function buildDagreLayout(
         return 260;
       }
 
-      return node.fileRole === "output" ? 170 : NODE_WIDTH;
+      return node.nodeType === "output" ? 170 : NODE_WIDTH;
     })
   );
   const maxNodeHeight = Math.max(
@@ -445,7 +448,7 @@ function buildDagreLayout(
         return 116;
       }
 
-      return node.fileRole === "output" ? 92 : NODE_HEIGHT;
+      return node.nodeType === "output" ? 92 : NODE_HEIGHT;
     })
   );
 

@@ -1,6 +1,20 @@
 export type CellValue = string | number | boolean;
 
 export type WorkbookRole = "input" | "output" | "other";
+export type PipelineNodeType = "input" | "formula" | "output";
+
+export interface RangeShape {
+  rows: number;
+  cols: number;
+  size: number;
+}
+
+export interface NodeRangeRef {
+  file: string;
+  sheet: string;
+  range: string;
+  nodeId?: string;
+}
 
 export interface CellReference {
   file: string;
@@ -12,9 +26,19 @@ export interface CellReference {
 
 export interface GraphNode {
   id: string;
+  nodeType: PipelineNodeType;
   fileName: string;
   fileRole: WorkbookRole;
   sheet: string;
+  range: string;
+  shape: RangeShape;
+  operation?: string;
+  inputs: NodeRangeRef[];
+  output?: NodeRangeRef;
+  rangeValues?: CellValue[];
+  formulaByCell?: Record<string, string>;
+
+  // Legacy field retained for compatibility with existing mutation/editor workflows.
   cell: string;
   formula?: string;
   value?: CellValue;
@@ -28,7 +52,13 @@ export interface GraphEdge {
 }
 
 export interface ValidationIssue {
-  type: "CIRCULAR_DEPENDENCY" | "INVALID_FORMULA" | "MISSING_REFERENCE";
+  type:
+    | "CIRCULAR_DEPENDENCY"
+    | "INVALID_FORMULA"
+    | "MISSING_REFERENCE"
+    | "INVALID_RANGE"
+    | "MISMATCHED_RANGE_SHAPE"
+    | "OVERLAPPING_WRITES";
   nodeId?: string;
   message: string;
   relatedNodeIds?: string[];

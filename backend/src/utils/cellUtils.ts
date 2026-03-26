@@ -1,4 +1,14 @@
 const CELL_REF_REGEX = /^\$?([A-Z]{1,3})\$?([0-9]+)$/;
+const RANGE_REF_REGEX = /^(\$?[A-Z]{1,3}\$?[0-9]+)(?::(\$?[A-Z]{1,3}\$?[0-9]+))?$/;
+
+export interface ParsedRange {
+  startCell: string;
+  endCell: string;
+  cells: string[];
+  rows: number;
+  cols: number;
+  size: number;
+}
 
 export function normalizeSheetName(sheet: string): string {
   return sheet.replace(/^'|'$/g, "").trim();
@@ -83,4 +93,44 @@ export function expandRange(startRef: string, endRef: string): string[] {
   }
 
   return cells;
+}
+
+export function parseRangeRef(rangeRef: string): ParsedRange | null {
+  const normalized = rangeRef.replace(/\s+/g, "").toUpperCase();
+  const match = normalized.match(RANGE_REF_REGEX);
+  if (!match) {
+    return null;
+  }
+
+  const startCell = normalizeCellAddress(match[1]);
+  const endCell = normalizeCellAddress(match[2] ?? match[1]);
+  const start = parseCellRef(startCell);
+  const end = parseCellRef(endCell);
+  if (!start || !end) {
+    return null;
+  }
+
+  const startCol = colToNumber(start.col);
+  const endCol = colToNumber(end.col);
+  const minCol = Math.min(startCol, endCol);
+  const maxCol = Math.max(startCol, endCol);
+  const minRow = Math.min(start.row, end.row);
+  const maxRow = Math.max(start.row, end.row);
+  const rows = maxRow - minRow + 1;
+  const cols = maxCol - minCol + 1;
+
+  return {
+    startCell: `${numberToCol(minCol)}${minRow}`,
+    endCell: `${numberToCol(maxCol)}${maxRow}`,
+    cells: expandRange(`${numberToCol(minCol)}${minRow}`, `${numberToCol(maxCol)}${maxRow}`),
+    rows,
+    cols,
+    size: rows * cols
+  };
+}
+
+export function encodeRange(startCell: string, endCell?: string): string {
+  const start = normalizeCellAddress(startCell);
+  const end = normalizeCellAddress(endCell ?? startCell);
+  return start === end ? start : `${start}:${end}`;
 }
