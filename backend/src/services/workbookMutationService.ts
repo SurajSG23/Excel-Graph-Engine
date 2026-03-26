@@ -7,11 +7,12 @@ import {
 } from "../models/graph";
 import {
   colToNumber,
+  getStartCell,
   normalizeCellAddress,
   normalizeSheetName,
   numberToCol,
   parseCellRef,
-  toNodeId
+  toCellKey
 } from "../utils/cellUtils";
 
 const TOKEN_REGEX = /(?:'[^']+'|\[[^\]]+\][^!]+|[A-Za-z0-9_\.]+)!\$?[A-Z]{1,3}\$?[0-9]+|\$?[A-Z]{1,3}\$?[0-9]+/g;
@@ -64,11 +65,16 @@ function formatFormulaToken(parsed: ParsedToken, currentFileName: string, curren
   return `'[${parsed.fileName}]${parsed.sheet}'!${parsed.cell}`;
 }
 
+/**
+ * Applies reference mapping to formulas when cells are moved/renamed.
+ * Uses cell-level tracking internally for precise formula rewriting.
+ * @internal
+ */
 function applyReferenceMapToFormula(
   formula: string | undefined,
   currentFileName: string,
   currentSheet: string,
-  nodeIdMap: Map<string, string>
+  cellKeyMap: Map<string, string>
 ): string | undefined {
   if (!formula || !formula.startsWith("=")) {
     return formula;
@@ -76,8 +82,8 @@ function applyReferenceMapToFormula(
 
   const replaceToken = (token: string): string => {
     const parsed = parseFormulaToken(token, currentFileName, currentSheet);
-    const oldId = toNodeId(parsed.fileName, parsed.sheet, parsed.cell);
-    const mapped = nodeIdMap.get(oldId);
+    const oldKey = toCellKey(parsed.fileName, parsed.sheet, parsed.cell);
+    const mapped = cellKeyMap.get(oldKey);
     if (!mapped) {
       return token;
     }
@@ -116,6 +122,16 @@ function shiftCellByColumn(cell: string, colDelta: number, thresholdCol: number)
   return `${numberToCol(Math.max(1, current + colDelta))}${parsed.row}`;
 }
 
+/**
+ * WorkbookMutationService applies operations to the graph.
+ *
+ * NOTE: While the graph model is range-based, mutation operations often work
+ * at cell granularity for user-facing editing (ADD_CELL, MOVE_CELL, etc.).
+ * After mutations, the graph should be rebuilt to re-group cells into ranges.
+ *
+ * TODO: Consider supporting range-level operations (ADD_RANGE, DELETE_RANGE)
+ * for batch operations that better align with the pipeline model.
+ */
 export class WorkbookMutationService {
   applyOperations(
     workbook: WorkbookGraph,
@@ -128,7 +144,7 @@ export class WorkbookMutationService {
     for (const op of operations) {
       switch (op.type) {
         case "ADD_CELL": {
-          const id = toNodeId(op.fileName, op.sheet, op.cell);
+          const id = toCellKey(op.fileName, op.sheet, op.cell);
           const idx = workingNodes.findIndex((node) => node.id === id);
           const role = op.fileRole ?? files.find((file) => file.fileName === op.fileName)?.role ?? "other";
           const created: GraphNode = {
@@ -194,7 +210,7 @@ export class WorkbookMutationService {
             op.toCell,
             oldId
           );
-          const newId = toNodeId(op.toFileName, normalizedSheet, targetCell);
+          const newId = toCellKey(op.toFileName, normalizedSheet, targetCell);
 
           const map = new Map<string, string>([[oldId, newId]]);
           source.fileName = op.toFileName;
@@ -337,7 +353,7 @@ export class WorkbookMutationService {
       const nextCell = shiftCellByRow(node.cell, count, index);
       if (nextCell !== node.cell) {
         node.cell = nextCell;
-        node.id = toNodeId(node.fileName, node.sheet, node.cell);
+        node.id = toCellKey(node.fileName, node.sheet, node.cell);
         map.set(oldId, node.id);
         changed.add(oldId);
         changed.add(node.id);
@@ -377,7 +393,7 @@ export class WorkbookMutationService {
       } else if (parsed.row > maxRow) {
         const oldId = node.id;
         node.cell = `${parsed.col}${parsed.row - count}`;
-        node.id = toNodeId(node.fileName, node.sheet, node.cell);
+        node.id = toCellKey(node.fileName, node.sheet, node.cell);
         map.set(oldId, node.id);
         changed.add(oldId);
         changed.add(node.id);
@@ -408,7 +424,7 @@ export class WorkbookMutationService {
       const nextCell = shiftCellByColumn(node.cell, count, index);
       if (nextCell !== node.cell) {
         node.cell = nextCell;
-        node.id = toNodeId(node.fileName, node.sheet, node.cell);
+        node.id = toCellKey(node.fileName, node.sheet, node.cell);
         map.set(oldId, node.id);
         changed.add(oldId);
         changed.add(node.id);
@@ -449,7 +465,7 @@ export class WorkbookMutationService {
       } else if (col > maxCol) {
         const oldId = node.id;
         node.cell = `${numberToCol(col - count)}${parsed.row}`;
-        node.id = toNodeId(node.fileName, node.sheet, node.cell);
+        node.id = toCellKey(node.fileName, node.sheet, node.cell);
         map.set(oldId, node.id);
         changed.add(oldId);
         changed.add(node.id);
@@ -499,7 +515,7 @@ export class WorkbookMutationService {
 
       const oldId = node.id;
       node.sheet = toSheet;
-      node.id = toNodeId(node.fileName, node.sheet, node.cell);
+      node.id = toCellKey(node.fileName, node.sheet, node.cell);
       map.set(oldId, node.id);
       changed.add(oldId);
       changed.add(node.id);
@@ -556,7 +572,7 @@ export class WorkbookMutationService {
       const nextRow = Math.max(1, item.ref.row + rowDelta);
       const nextCol = Math.max(1, colToNumber(item.ref.col) + colDelta);
       const cell = `${numberToCol(nextCol)}${nextRow}`;
-      const id = toNodeId(targetFileName, targetSheet, cell);
+      const id = toCellKey(targetFileName, targetSheet, cell);
 
       const pasted: GraphNode = {
         ...item.node,

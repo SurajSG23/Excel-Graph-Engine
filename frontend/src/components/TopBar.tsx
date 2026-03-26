@@ -20,6 +20,7 @@ export function TopBar() {
   const setGroupSimilarFormulas = useWorkbookStore((s) => s.setGroupSimilarFormulas);
   const undo = useWorkbookStore((s) => s.undo);
   const redo = useWorkbookStore((s) => s.redo);
+  const runPipeline = useWorkbookStore((s) => s.runPipeline);
   const triggerExport = useWorkbookStore((s) => s.triggerExport);
   const sheets = workbook
     ? selectedFile === "ALL"
@@ -32,7 +33,7 @@ export function TopBar() {
   return (
     <section className="panel topbar">
       <details className="panel-collapsible" open>
-        <summary>Graph Controls</summary>
+        <summary>Pipeline Controls</summary>
         <div className="toolbar-group">
           <label>
             File Selector
@@ -59,10 +60,10 @@ export function TopBar() {
           </label>
 
           <label>
-            Search Nodes
+            Search Ranges
             <input
               value={searchText}
-              placeholder="Node, cell, formula"
+              placeholder="Node, range, operation"
               onChange={(e) => setSearchText(e.target.value)}
             />
           </label>
@@ -115,10 +116,20 @@ export function TopBar() {
             <Redo2 size={16} strokeWidth={2.2} aria-hidden="true" />
             <span>Redo</span>
           </button>
+          <button
+            type="button"
+            className="toolbar-icon-button"
+            onClick={() => runPipeline("Run pipeline")}
+            disabled={!workbook}
+            aria-label="Run pipeline"
+            title="Run pipeline"
+          >
+            <span>Run Pipeline</span>
+          </button>
         </div>
 
         <button onClick={() => triggerExport()} disabled={!workbook}>
-          Export Workbook
+          Download Output Workbook
         </button>
       </details>
     </section>

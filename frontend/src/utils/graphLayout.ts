@@ -23,7 +23,11 @@ const SHEET_GAP_X = 90;
 const SHEET_GAP_Y = 94;
 const HANDLE_SLOT_COUNT = 4;
 
-export interface FlowCellData {
+/**
+ * FlowRangeData represents the data for a range node in the flow graph.
+ * Each node represents a range of cells (e.g., A1:A100), not individual cells.
+ */
+export interface FlowRangeData {
   [key: string]: unknown;
   label: string;
   nodeType: "input" | "formula" | "output";
@@ -47,6 +51,11 @@ export interface FlowCellData {
   isHovered: boolean;
   showExtra: boolean;
 }
+
+/**
+ * @deprecated Use FlowRangeData instead. FlowCellData is an alias for backward compatibility.
+ */
+export type FlowCellData = FlowRangeData;
 
 export interface FlowFormulaGroupData {
   [key: string]: unknown;
@@ -130,11 +139,15 @@ function hashSheetColor(sheet: string): string {
   return SHEET_COLORS[sum % SHEET_COLORS.length];
 }
 
+/**
+ * Converts graph nodes to flow nodes for visualization.
+ * Returns range-based nodes that represent data pipelines.
+ */
 export function toFlowNodes(
   graphNodes: GraphViewNode[],
   graphEdges: GraphEdge[],
   context: FlowBuildContext
-): Array<Node<FlowCellData> | Node<FlowFormulaGroupData> | Node<FlowSheetGroupData> | Node<FlowRoleGroupData>> {
+): Array<Node<FlowRangeData> | Node<FlowFormulaGroupData> | Node<FlowSheetGroupData> | Node<FlowRoleGroupData>> {
   const indegree = new Map<string, number>();
   const outdegree = new Map<string, number>();
 
@@ -190,7 +203,7 @@ export function toFlowNodes(
     zIndex: -1
   }));
 
-  const viewNodes: Array<Node<FlowCellData> | Node<FlowFormulaGroupData>> = graphNodes.map((node) => {
+  const viewNodes: Array<Node<FlowRangeData> | Node<FlowFormulaGroupData>> = graphNodes.map((node) => {
     const color = hashSheetColor(node.sheet);
     const isSelected = context.selectedNodeId === node.id;
     const isHighlighted = context.highlight.has(node.id);
@@ -265,7 +278,7 @@ export function toFlowNodes(
         width: role === "output" ? 170 : NODE_WIDTH,
         height: role === "output" ? 92 : NODE_HEIGHT
       }
-    } satisfies Node<FlowCellData>;
+    } satisfies Node<FlowRangeData>;
   });
 
   return [...roleGroups, ...sheetGroups, ...viewNodes];

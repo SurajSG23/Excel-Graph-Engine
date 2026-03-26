@@ -3,6 +3,7 @@ import {
   applyWorkbookOperations,
   exportWorkbook,
   recomputeWorkbook,
+  runPipeline as runPipelineRequest,
   redoWorkbook,
   undoWorkbook,
   uploadWorkbook
@@ -33,6 +34,7 @@ interface WorkbookState {
   setShowZeroDependencyNodes: (value: boolean) => void;
   setGroupSimilarFormulas: (value: boolean) => void;
   applyUpdate: (updates: NodeUpdate[], label?: string) => Promise<void>;
+  runPipeline: (label?: string) => Promise<void>;
   applyOperations: (operations: WorkbookOperation[], label?: string) => Promise<void>;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
@@ -123,6 +125,28 @@ export const useWorkbookStore = create<WorkbookState>((set, get) => ({
       set({
         loading: false,
         error: error instanceof Error ? error.message : "Recompute failed"
+      });
+    }
+  },
+
+  async runPipeline(label) {
+    const workbookId = get().workbook?.workbookId;
+    if (!workbookId) {
+      return;
+    }
+
+    set({ loading: true, error: null });
+    try {
+      const response = await runPipelineRequest(workbookId, label);
+      set({
+        workbook: response.workbook,
+        versions: response.versions,
+        loading: false
+      });
+    } catch (error) {
+      set({
+        loading: false,
+        error: error instanceof Error ? error.message : "Pipeline run failed"
       });
     }
   },

@@ -1,6 +1,10 @@
 import { GraphNode, ValidationIssue } from "../models/graph";
-import { parseRangeRef } from "../utils/cellUtils";
+import { parseRangeRef, rangesOverlap } from "../utils/cellUtils";
 
+/**
+ * ValidationService validates the range-based graph for consistency and correctness.
+ * All validation operates at the range level, not cell level.
+ */
 export class ValidationService {
   validate(
     nodes: GraphNode[],
@@ -122,40 +126,39 @@ export class ValidationService {
     return issues;
   }
 
+  /**
+   * Detects overlapping write ranges between formula and output nodes.
+   * Uses range-level overlap detection instead of cell-level expansion.
+   */
   private detectOverlappingWrites(nodes: GraphNode[]): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
     const writers = nodes.filter((node) => node.nodeType === "formula" || node.nodeType === "output");
 
     for (let i = 0; i < writers.length; i += 1) {
       const left = writers[i];
-      const leftRange = parseRangeRef(left.range);
-      if (!leftRange) {
+      if (!parseRangeRef(left.range)) {
         continue;
       }
 
-      const leftSet = new Set(leftRange.cells.map((cell) => `${left.fileName}::${left.sheet}::${cell}`));
       for (let j = i + 1; j < writers.length; j += 1) {
         const right = writers[j];
         if (left.fileName !== right.fileName || left.sheet !== right.sheet) {
           continue;
         }
 
-        const rightRange = parseRangeRef(right.range);
-        if (!rightRange) {
+        if (!parseRangeRef(right.range)) {
           continue;
         }
 
-        const intersects = rightRange.cells.some((cell) => leftSet.has(`${right.fileName}::${right.sheet}::${cell}`));
-        if (!intersects) {
-          continue;
+        // Use range-level overlap detection instead of cell expansion
+        if (rangesOverlap(left.range, right.range)) {
+          issues.push({
+            type: "OVERLAPPING_WRITES",
+            nodeId: left.id,
+            message: `Overlapping write ranges detected between ${left.id} and ${right.id}.`,
+            relatedNodeIds: [left.id, right.id]
+          });
         }
-
-        issues.push({
-          type: "OVERLAPPING_WRITES",
-          nodeId: left.id,
-          message: `Overlapping write ranges detected between ${left.id} and ${right.id}.`,
-          relatedNodeIds: [left.id, right.id]
-        });
       }
     }
 

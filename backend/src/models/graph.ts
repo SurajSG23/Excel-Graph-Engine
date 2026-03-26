@@ -16,6 +16,29 @@ export interface NodeRangeRef {
   nodeId?: string;
 }
 
+export interface TemplateRangeMapping {
+  key: string;
+  label: string;
+  sourceRange: NodeRangeRef;
+  targetRange: NodeRangeRef;
+}
+
+/**
+ * RangeReference represents a dependency on a range of cells.
+ * This is the primary reference type used in the range-based pipeline model.
+ */
+export interface RangeReference {
+  file: string;
+  sheet: string;
+  range: string; // e.g., "A1:A10" or "B2" (single cell treated as 1x1 range)
+  external: boolean;
+  original: string;
+}
+
+/**
+ * @deprecated Use RangeReference instead. CellReference is retained for internal
+ * formula parsing where individual cell tracking is needed during execution.
+ */
 export interface CellReference {
   file: string;
   sheet: string;
@@ -24,25 +47,52 @@ export interface CellReference {
   original: string;
 }
 
+/**
+ * GraphNode represents a node in the range-based pipeline graph.
+ * Each node operates on ranges (not individual cells).
+ *
+ * Key principle: Range is the atomic unit. All operations treat
+ * ranges as the smallest addressable unit in the graph.
+ */
 export interface GraphNode {
   id: string;
+  type?: PipelineNodeType;
   nodeType: PipelineNodeType;
   fileName: string;
   fileRole: WorkbookRole;
   sheet: string;
-  range: string;
+  range: string; // The primary identifier - always a range (e.g., "A1:A10" or "B2")
   shape: RangeShape;
   operation?: string;
   inputs: NodeRangeRef[];
+  inputRanges?: NodeRangeRef[];
   output?: NodeRangeRef;
+  outputRange?: NodeRangeRef;
   rangeValues?: CellValue[];
+  values?: CellValue[];
+  formulaTemplate?: string;
+
+  /**
+   * @internal Used only during formula execution to track per-cell formulas
+   * when cells in a range have different (but pattern-similar) formulas.
+   * This is an implementation detail, not part of the range-based model.
+   */
   formulaByCell?: Record<string, string>;
 
-  // Legacy field retained for compatibility with existing mutation/editor workflows.
+  /**
+   * @deprecated Legacy field - use `range` instead. The anchor cell can be
+   * derived from the range's start position. Retained temporarily for
+   * backward compatibility with mutation workflows.
+   */
   cell: string;
   formula?: string;
   value?: CellValue;
-  dependencies: string[];
+  dependencies: string[]; // Node IDs (range-based), not cell IDs
+
+  /**
+   * @internal Detailed cell-level references used during execution.
+   * The graph structure uses node-level dependencies; this is for execution only.
+   */
   referenceDetails: CellReference[];
 }
 
@@ -76,6 +126,7 @@ export interface WorkbookGraph {
     uploadName: string;
   }>;
   outputFileName: string;
+  templateMappings?: TemplateRangeMapping[];
   validationIssues: ValidationIssue[];
   version: number;
 }
@@ -86,6 +137,12 @@ export interface NodeUpdate {
   value?: CellValue;
 }
 
+/**
+ * ParsedCell represents raw cell data from Excel parsing.
+ * This is an internal representation used during the parsing phase.
+ * Cells are grouped into ranges during graph building.
+ * @internal
+ */
 export interface ParsedCell {
   fileName: string;
   fileRole: WorkbookRole;
@@ -103,6 +160,16 @@ export interface ParsedWorkbook {
   cells: ParsedCell[];
 }
 
+/**
+ * WorkbookOperation defines mutations that can be applied to the graph.
+ *
+ * NOTE: While the graph model is range-based, some operations (like ADD_CELL)
+ * still operate at cell granularity for user-facing editing. These cells
+ * are grouped into ranges during subsequent graph rebuilding.
+ *
+ * TODO: Consider migrating to range-based operations (ADD_RANGE, DELETE_RANGE)
+ * for better alignment with the pipeline model.
+ */
 export type WorkbookOperation =
   | {
       type: "ADD_CELL";

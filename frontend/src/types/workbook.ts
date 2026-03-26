@@ -16,6 +16,29 @@ export interface NodeRangeRef {
   nodeId?: string;
 }
 
+export interface TemplateRangeMapping {
+  key: string;
+  label: string;
+  sourceRange: NodeRangeRef;
+  targetRange: NodeRangeRef;
+}
+
+/**
+ * RangeReference represents a dependency on a range of cells.
+ * This is the primary reference type used in the range-based pipeline model.
+ */
+export interface RangeReference {
+  file: string;
+  sheet: string;
+  range: string;
+  external: boolean;
+  original: string;
+}
+
+/**
+ * @deprecated Use RangeReference instead. CellReference is retained for internal
+ * formula parsing where individual cell tracking is needed during execution.
+ */
 export interface CellReference {
   file: string;
   sheet: string;
@@ -24,19 +47,36 @@ export interface CellReference {
   original: string;
 }
 
+/**
+ * GraphNode represents a node in the range-based pipeline graph.
+ * Each node operates on ranges (not individual cells).
+ *
+ * Key principle: Range is the atomic unit. All operations treat
+ * ranges as the smallest addressable unit in the graph.
+ */
 export interface GraphNode {
   id: string;
+  type?: PipelineNodeType;
   nodeType: PipelineNodeType;
   fileName: string;
   fileRole: WorkbookRole;
   sheet: string;
-  range: string;
+  range: string; // The primary identifier - always a range (e.g., "A1:A10" or "B2")
   shape: RangeShape;
   operation?: string;
   inputs: NodeRangeRef[];
+  inputRanges?: NodeRangeRef[];
   output?: NodeRangeRef;
+  outputRange?: NodeRangeRef;
   rangeValues?: CellValue[];
+  values?: CellValue[];
+  formulaTemplate?: string;
   formulaByCell?: Record<string, string>;
+
+  /**
+   * @deprecated Legacy field - use `range` instead. The anchor cell can be
+   * derived from the range's start position. Retained for backward compatibility.
+   */
   cell: string;
   formula?: string;
   value?: CellValue;
@@ -74,6 +114,7 @@ export interface WorkbookGraph {
     uploadName: string;
   }>;
   outputFileName: string;
+  templateMappings?: TemplateRangeMapping[];
   validationIssues: ValidationIssue[];
   version: number;
 }

@@ -7,6 +7,7 @@ import { WorkbookSessionService } from "./workbookSessionService";
 import { ExportService } from "./exportService";
 import { FileRegistryService } from "./fileRegistryService";
 import { WorkbookMutationService } from "./workbookMutationService";
+import { TemplateMappingService } from "./templateMappingService";
 
 export const formulaParserService = new FormulaParserService();
 export const graphBuilderService = new GraphBuilderService(formulaParserService);
@@ -17,3 +18,4 @@ export const workbookSessionService = new WorkbookSessionService();
 export const exportService = new ExportService();
 export const fileRegistryService = new FileRegistryService();
 export const workbookMutationService = new WorkbookMutationService();
+export const templateMappingService = new TemplateMappingService();

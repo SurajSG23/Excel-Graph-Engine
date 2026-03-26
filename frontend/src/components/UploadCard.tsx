@@ -30,8 +30,8 @@ export function UploadCard() {
 
   return (
     <details className="upload-card panel panel-collapsible" open>
-      <summary>Workbook Upload</summary>
-      <p>Provide input and output workbooks together.</p>
+      <summary>Pipeline Upload</summary>
+      <p>Upload source data workbook and output template workbook.</p>
 
       <div className="upload-grid">
         <div
@@ -94,7 +94,7 @@ export function UploadCard() {
               disabled={loading}
             />
             <span className="upload-dropzone-line upload-dropzone-title">
-              Output workbook
+              Template workbook
             </span>
             <span className="upload-status-badge">
               {outputFile ? <CheckCircle2 size={14} /> : <FileUp size={14} />}
@@ -109,7 +109,7 @@ export function UploadCard() {
               type="button"
               className="upload-clear-button"
               onClick={() => setOutputFile(undefined)}
-              aria-label="Remove output workbook"
+              aria-label="Remove template workbook"
               disabled={loading}
             >
               <Trash2 size={16} />
@@ -124,7 +124,7 @@ export function UploadCard() {
           onClick={onUploadPair}
           disabled={loading || (!inputFile && !outputFile)}
         >
-          {loading ? "Processing..." : "Upload Selected Workbooks"}
+          {loading ? "Parsing ranges..." : "Upload Input + Template"}
         </button>
       </div>
     </details>

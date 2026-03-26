@@ -4,22 +4,25 @@ import {
   GraphNode,
   NodeRangeRef,
   ParsedCell,
-  ParsedWorkbook
+  ParsedWorkbook,
+  TemplateRangeMapping
 } from "../models/graph";
 import { FormulaParserService } from "./formulaParserService";
 import {
   colToNumber,
   encodeRange,
+  getStartCell,
   normalizeCellAddress,
   numberToCol,
   parseCellRef,
   parseRangeRef,
-  toNodeId
+  toCellKey
 } from "../utils/cellUtils";
 
 export interface BuildResult {
   nodes: GraphNode[];
   edges: GraphEdge[];
+  templateMappings: TemplateRangeMapping[];
   sheets: string[];
   files: Array<{
     fileName: string;
@@ -29,6 +32,15 @@ export interface BuildResult {
   }>;
 }
 
+/**
+ * GraphBuilderService constructs a range-based pipeline graph from parsed workbooks.
+ *
+ * Key principles:
+ * 1. Nodes represent RANGES, not individual cells
+ * 2. Adjacent cells with similar formulas are grouped into single nodes
+ * 3. Dependencies are tracked at the node level (range-to-range)
+ * 4. Cell-level tracking is internal (for formula grouping and execution)
+ */
 export class GraphBuilderService {
   constructor(private readonly formulaParserService: FormulaParserService) {}
 
@@ -82,24 +94,30 @@ export class GraphBuilderService {
     const formulaCells = allCells.filter((cell) => typeof cell.formula === "string" && cell.formula.startsWith("="));
     const valueCells = allCells.filter((cell) => !cell.formula);
 
+    // Group formula cells by signature (same formula pattern) and adjacency
     const groupedFormulas = this.groupFormulaCells(formulaCells, filesMeta);
+
+    // Build cell-to-node mapping for dependency resolution
+    // This uses cell keys internally but maps to range-based node IDs
     const formulaProducerByCell = new Map<string, string>();
     for (const group of groupedFormulas) {
       for (const cell of group.cells) {
-        formulaProducerByCell.set(toNodeId(group.fileName, group.sheet, cell), group.id);
+        formulaProducerByCell.set(toCellKey(group.fileName, group.sheet, cell), group.id);
       }
     }
 
+    // Track which cells are referenced by formulas (needed for input node creation)
     const referencedCells = new Set<string>();
     for (const group of groupedFormulas) {
       for (const ref of group.referenceDetails) {
-        referencedCells.add(toNodeId(ref.file, ref.sheet, ref.cell));
+        referencedCells.add(toCellKey(ref.file, ref.sheet, ref.cell));
       }
     }
 
+    // Filter value cells to those that are either in input files or referenced by formulas
     const groupedInputCandidates = valueCells.filter((cell) => {
-      const cellId = toNodeId(cell.fileName, cell.sheet, cell.cell);
-      return cell.fileRole === "input" || referencedCells.has(cellId);
+      const cellKey = toCellKey(cell.fileName, cell.sheet, cell.cell);
+      return cell.fileRole === "input" || referencedCells.has(cellKey);
     });
 
     const inputNodes: GraphNode[] = [];
@@ -112,6 +130,7 @@ export class GraphBuilderService {
         continue;
       }
 
+      // Build range-based node ID for input node
       const nodeId = `input::${group.fileName}::${group.sheet}::${group.range}`;
       const valuesByCell = new Map(
         group.cells.map((entry) => [normalizeCellAddress(entry.cell), entry.value] as const)
@@ -122,6 +141,7 @@ export class GraphBuilderService {
 
       inputNodes.push({
         id: nodeId,
+        type: "input",
         nodeType: "input",
         fileName: group.fileName,
         fileRole: group.fileRole,
@@ -134,20 +154,28 @@ export class GraphBuilderService {
         },
         operation: "ReadRange",
         inputs: [],
+        inputRanges: [],
         output: {
           file: group.fileName,
           sheet: group.sheet,
           range: group.range
         },
+        outputRange: {
+          file: group.fileName,
+          sheet: group.sheet,
+          range: group.range
+        },
         rangeValues: orderedValues,
-        cell: parsedRange.startCell,
+        values: orderedValues,
+        cell: parsedRange.startCell, // Legacy field - derived from range
         value: orderedValues[0],
         dependencies: [],
         referenceDetails: []
       });
 
+      // Map each cell in the range to this node for dependency resolution
       for (const cell of parsedRange.cells) {
-        inputProducerByCell.set(toNodeId(group.fileName, group.sheet, cell), nodeId);
+        inputProducerByCell.set(toCellKey(group.fileName, group.sheet, cell), nodeId);
       }
     }
 
@@ -156,11 +184,15 @@ export class GraphBuilderService {
       nodeById.set(node.id, node);
     }
 
+    /**
+     * Create range-based formula nodes from grouped formula cells.
+     */
     const formulaNodes: GraphNode[] = groupedFormulas.map((group) => {
+      // Resolve dependencies: find the producing nodes for each referenced cell
       const dependencies = new Set<string>();
       for (const ref of group.referenceDetails) {
-        const refId = toNodeId(ref.file, ref.sheet, ref.cell);
-        const producer = formulaProducerByCell.get(refId) ?? inputProducerByCell.get(refId);
+        const refKey = toCellKey(ref.file, ref.sheet, ref.cell);
+        const producer = formulaProducerByCell.get(refKey) ?? inputProducerByCell.get(refKey);
         if (producer) {
           dependencies.add(producer);
         }
@@ -184,6 +216,7 @@ export class GraphBuilderService {
 
       const node: GraphNode = {
         id: group.id,
+        type: "formula",
         nodeType: "formula",
         fileName: group.fileName,
         fileRole: group.fileRole,
@@ -192,14 +225,22 @@ export class GraphBuilderService {
         shape,
         operation: this.detectOperationName(group.formulaTemplate),
         inputs,
+        inputRanges: inputs,
         output: {
           file: group.fileName,
           sheet: group.sheet,
           range: group.outputRange
         },
+        outputRange: {
+          file: group.fileName,
+          sheet: group.sheet,
+          range: group.outputRange
+        },
         formula: group.formulaTemplate,
+        formulaTemplate: group.formulaTemplate,
         formulaByCell: group.formulaByCell,
         rangeValues: [],
+        values: [],
         cell: group.anchorCell,
         dependencies: dependencyArray,
         referenceDetails: group.referenceDetails
@@ -209,20 +250,32 @@ export class GraphBuilderService {
       return node;
     });
 
+    /**
+     * Create output nodes that mirror formula nodes for write operations.
+     * Each formula node gets a corresponding output node.
+     */
     const outputNodes: GraphNode[] = formulaNodes.map((formulaNode) => {
       const outputId = `output::${formulaNode.fileName}::${formulaNode.sheet}::${formulaNode.range}`;
-      const outputParsed = parseRangeRef(formulaNode.range);
       return {
         id: outputId,
+        type: "output",
         nodeType: "output",
         fileName: formulaNode.fileName,
         fileRole: formulaNode.fileRole,
         sheet: formulaNode.sheet,
-        cell: outputParsed?.startCell ?? formulaNode.cell,
+        cell: getStartCell(formulaNode.range), // Legacy field - derived from range
         range: formulaNode.range,
         shape: { ...formulaNode.shape },
         operation: "WriteRange",
         inputs: [
+          {
+            file: formulaNode.fileName,
+            sheet: formulaNode.sheet,
+            range: formulaNode.range,
+            nodeId: formulaNode.id
+          }
+        ],
+        inputRanges: [
           {
             file: formulaNode.fileName,
             sheet: formulaNode.sheet,
@@ -235,13 +288,20 @@ export class GraphBuilderService {
           sheet: formulaNode.sheet,
           range: formulaNode.range
         },
+        outputRange: {
+          file: formulaNode.fileName,
+          sheet: formulaNode.sheet,
+          range: formulaNode.range
+        },
         rangeValues: [],
+        values: [],
         dependencies: [formulaNode.id],
         referenceDetails: []
       };
     });
 
     const nodes = [...inputNodes, ...formulaNodes, ...outputNodes];
+    const templateMappings = this.buildTemplateMappings(formulaNodes, outputNodes);
 
     const uniqueSheets = new Set<string>();
     for (const workbook of workbooks) {
@@ -253,6 +313,7 @@ export class GraphBuilderService {
     return {
       nodes,
       edges: this.buildEdges(nodes),
+      templateMappings,
       sheets: [...uniqueSheets],
       files: workbooks.map((workbook) => ({
         fileName: workbook.fileName,
@@ -273,6 +334,10 @@ export class GraphBuilderService {
       if (node.nodeType !== "formula") {
         return {
           ...node,
+          type: node.nodeType,
+          inputRanges: node.inputRanges ?? node.inputs,
+          outputRange: node.outputRange ?? node.output,
+          values: node.values ?? node.rangeValues,
           shape
         };
       }
@@ -284,6 +349,11 @@ export class GraphBuilderService {
 
       return {
         ...node,
+        type: node.nodeType,
+        inputRanges: node.inputRanges ?? node.inputs,
+        outputRange: node.outputRange ?? node.output,
+        values: node.values ?? node.rangeValues,
+        formulaTemplate: node.formulaTemplate ?? node.formula,
         shape,
         referenceDetails
       };
@@ -297,9 +367,47 @@ export class GraphBuilderService {
     return {
       nodes: rebuiltNodes,
       edges: this.buildEdges(rebuiltNodes),
+      templateMappings: [],
       sheets: [...uniqueSheets],
       files
     };
+  }
+
+  private buildTemplateMappings(formulaNodes: GraphNode[], outputNodes: GraphNode[]): TemplateRangeMapping[] {
+    const formulaById = new Map(formulaNodes.map((node) => [node.id, node]));
+    const mappings: TemplateRangeMapping[] = [];
+
+    for (const outputNode of outputNodes) {
+      if (outputNode.fileRole !== "output") {
+        continue;
+      }
+
+      const producerId = outputNode.dependencies[0];
+      const producer = producerId ? formulaById.get(producerId) : undefined;
+      if (!producer || producer.inputs.length === 0) {
+        continue;
+      }
+
+      const primaryInput = producer.inputs[0];
+      mappings.push({
+        key: `${outputNode.fileName}::${outputNode.sheet}::${outputNode.range}`,
+        label: `${outputNode.sheet}!${outputNode.range}`,
+        sourceRange: {
+          file: primaryInput.file,
+          sheet: primaryInput.sheet,
+          range: primaryInput.range,
+          nodeId: primaryInput.nodeId
+        },
+        targetRange: {
+          file: outputNode.fileName,
+          sheet: outputNode.sheet,
+          range: outputNode.range,
+          nodeId: outputNode.id
+        }
+      });
+    }
+
+    return mappings;
   }
 
   private buildEdges(nodes: GraphNode[]): GraphEdge[] {
@@ -363,7 +471,7 @@ export class GraphBuilderService {
         const chunks = range ? [component] : component.map((entry) => [entry]);
 
         for (const chunk of chunks) {
-          const ordered = [...chunk].sort((left, right) => toNodeId(left.fileName, left.sheet, left.cell).localeCompare(toNodeId(right.fileName, right.sheet, right.cell)));
+          const ordered = [...chunk].sort((left, right) => toCellKey(left.fileName, left.sheet, left.cell).localeCompare(toCellKey(right.fileName, right.sheet, right.cell)));
           const anchor = ordered[0];
           const rectangularRange = this.tryRectangularRange(ordered.map((item) => item.cell)) ?? encodeRange(anchor.cell);
           const refs = new Map<string, CellReference>();
@@ -405,7 +513,7 @@ export class GraphBuilderService {
     const components: ParsedCell[][] = [];
     const byKey = new Map<string, ParsedCell>();
     for (const cell of cells) {
-      byKey.set(toNodeId(cell.fileName, cell.sheet, cell.cell), cell);
+      byKey.set(toCellKey(cell.fileName, cell.sheet, cell.cell), cell);
     }
 
     const visited = new Set<string>();
@@ -417,7 +525,7 @@ export class GraphBuilderService {
     ];
 
     for (const cell of cells) {
-      const startId = toNodeId(cell.fileName, cell.sheet, cell.cell);
+      const startId = toCellKey(cell.fileName, cell.sheet, cell.cell);
       if (visited.has(startId)) {
         continue;
       }
@@ -442,7 +550,7 @@ export class GraphBuilderService {
           }
 
           const neighborCell = `${numberToCol(colNum)}${rowNum}`;
-          const neighborId = toNodeId(current.fileName, current.sheet, neighborCell);
+          const neighborId = toCellKey(current.fileName, current.sheet, neighborCell);
           const neighbor = byKey.get(neighborId);
           if (!neighbor || visited.has(neighborId)) {
             continue;
@@ -529,7 +637,7 @@ export class GraphBuilderService {
             ...entry,
             cell: normalizeCellAddress(entry.cell)
           }))
-          .sort((left, right) => toNodeId(left.fileName, left.sheet, left.cell).localeCompare(toNodeId(right.fileName, right.sheet, right.cell)));
+          .sort((left, right) => toCellKey(left.fileName, left.sheet, left.cell).localeCompare(toCellKey(right.fileName, right.sheet, right.cell)));
 
         if (normalizedCells.length === 0) {
           continue;

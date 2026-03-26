@@ -1,12 +1,19 @@
 import * as formulajs from "formulajs";
 import { CellValue, GraphNode, ValidationIssue } from "../models/graph";
-import { normalizeCellAddress, normalizeFileName, normalizeSheetName, parseRangeRef } from "../utils/cellUtils";
+import { normalizeCellAddress, normalizeFileName, normalizeSheetName, parseRangeRef, toCellKey } from "../utils/cellUtils";
 
 interface RecomputeResult {
   nodes: GraphNode[];
   issues: ValidationIssue[];
 }
 
+/**
+ * ExecutionEngineService evaluates formula nodes and propagates values through the graph.
+ *
+ * While the graph structure is range-based, execution internally tracks values at
+ * the cell level for precise formula evaluation. This is an implementation detail
+ * that doesn't affect the range-based graph model.
+ */
 export class ExecutionEngineService {
   recompute(nodes: GraphNode[], changedNodeIds: string[] = []): RecomputeResult {
     const nodeMap = new Map(nodes.map((node) => [node.id, { ...node }]));
@@ -148,6 +155,9 @@ export class ExecutionEngineService {
     }
   }
 
+  /**
+   * @internal Reads values for a range from the cell value map.
+   */
   private readRangeValues(
     cellValues: Map<string, CellValue>,
     fileName: string,
@@ -159,9 +169,12 @@ export class ExecutionEngineService {
       return [];
     }
 
-    return parsed.cells.map((cell) => cellValues.get(this.cellKey(fileName, sheet, cell)) ?? "");
+    return parsed.cells.map((cell) => cellValues.get(toCellKey(fileName, sheet, cell)) ?? "");
   }
 
+  /**
+   * @internal Writes values for a range to the cell value map.
+   */
   private writeRangeValues(
     cellValues: Map<string, CellValue>,
     fileName: string,
@@ -175,12 +188,8 @@ export class ExecutionEngineService {
     }
 
     for (let i = 0; i < parsed.cells.length && i < values.length; i += 1) {
-      cellValues.set(this.cellKey(fileName, sheet, parsed.cells[i]), values[i]);
+      cellValues.set(toCellKey(fileName, sheet, parsed.cells[i]), values[i]);
     }
-  }
-
-  private cellKey(fileName: string, sheet: string, cell: string): string {
-    return `${normalizeFileName(fileName)}::${normalizeSheetName(sheet)}::${normalizeCellAddress(cell)}`;
   }
 
   private computeAffectedNodes(changedNodeIds: string[], dependentsMap: Map<string, string[]>): Set<string> {
@@ -301,20 +310,20 @@ export class ExecutionEngineService {
       const rightParsed = this.parseRef(right, currentFileName, currentSheet);
 
       if (leftParsed.file !== rightParsed.file || leftParsed.sheet !== rightParsed.sheet) {
-        const leftValue = this.getNumericValue(cellValues.get(this.cellKey(leftParsed.file, leftParsed.sheet, leftParsed.cell)));
-        const rightValue = this.getNumericValue(cellValues.get(this.cellKey(rightParsed.file, rightParsed.sheet, rightParsed.cell)));
+        const leftValue = this.getNumericValue(cellValues.get(toCellKey(leftParsed.file, leftParsed.sheet, leftParsed.cell)));
+        const rightValue = this.getNumericValue(cellValues.get(toCellKey(rightParsed.file, rightParsed.sheet, rightParsed.cell)));
         return `[${leftValue},${rightValue}]`;
       }
 
       const cells = parseRangeRef(`${leftParsed.cell}:${rightParsed.cell}`)?.cells ?? [];
-      const values = cells.map((cell) => this.getNumericValue(cellValues.get(this.cellKey(leftParsed.file, leftParsed.sheet, cell))));
+      const values = cells.map((cell) => this.getNumericValue(cellValues.get(toCellKey(leftParsed.file, leftParsed.sheet, cell))));
       return `[${values.join(",")}]`;
     });
 
     const referenceRegex = /(?:'[^']+'|\[[^\]]+\][^!]+|[A-Za-z0-9_\.]+)!\$?[A-Z]{1,3}\$?[0-9]+|\$?[A-Z]{1,3}\$?[0-9]+/g;
     body = body.replace(referenceRegex, (token) => {
       const parsed = this.parseRef(token, currentFileName, currentSheet);
-      const value = cellValues.get(this.cellKey(parsed.file, parsed.sheet, parsed.cell));
+      const value = cellValues.get(toCellKey(parsed.file, parsed.sheet, parsed.cell));
       return String(this.getNumericValue(value));
     });
 

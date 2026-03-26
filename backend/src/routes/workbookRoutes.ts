@@ -38,6 +38,7 @@ router.post(
   (req, res) => workbookController.uploadWorkbook(req, res)
 );
 router.post("/recompute", (req, res) => workbookController.recomputeWorkbook(req, res));
+router.post("/run", (req, res) => workbookController.runPipeline(req, res));
 router.post("/operations", (req, res) => workbookController.applyOperations(req, res));
 router.post("/undo", (req, res) => workbookController.undo(req, res));
 router.post("/redo", (req, res) => workbookController.redo(req, res));

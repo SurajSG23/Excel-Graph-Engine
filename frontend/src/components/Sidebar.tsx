@@ -17,7 +17,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
   return (
     <aside className={`dashboard-sidebar ${isOpen ? "is-open" : "is-closed"}`}>
       <div className="sidebar-header">
-        <h1>Excel Graph Engine</h1>
+        <h1>Excel2Graph Pipeline Engine</h1>
         <button
           type="button"
           className="sidebar-toggle icon-button"

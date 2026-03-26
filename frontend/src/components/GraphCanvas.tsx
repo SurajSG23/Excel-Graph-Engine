@@ -15,28 +15,33 @@ import "@xyflow/react/dist/style.css";
 import { useWorkbookStore } from "../store/workbookStore";
 import {
   buildTraversalSets,
-  FlowCellData,
+  FlowRangeData,
   FlowFormulaGroupData,
   FlowRoleGroupData,
   FlowSheetGroupData,
   toFlowEdges,
   toFlowNodes,
 } from "../utils/graphLayout";
-import { CellNode } from "./CellNode";
+import { RangeNode } from "./RangeNode";
 import { SheetGroupNode } from "./SheetGroupNode";
 import { RoleGroupNode } from "./RoleGroupNode";
 import { FormulaGroupNode } from "./FormulaGroupNode";
 import { isGroupedNode, projectGraphForFormulaGrouping } from "../utils/formulaGrouping";
 
+/**
+ * Node types for the range-based pipeline graph.
+ * Uses rangeNode instead of cellNode to reflect the range-based architecture.
+ */
 const nodeTypes = {
-  cellNode: CellNode,
+  cellNode: RangeNode, // Keep cellNode key for backward compatibility with existing data
+  rangeNode: RangeNode,
   formulaGroup: FormulaGroupNode,
   roleGroup: RoleGroupNode,
   sheetGroup: SheetGroupNode,
 };
 
 type FlowNode =
-  | Node<FlowCellData>
+  | Node<FlowRangeData>
   | Node<FlowFormulaGroupData>
   | Node<FlowRoleGroupData>
   | Node<FlowSheetGroupData>;
@@ -53,7 +58,6 @@ export function GraphCanvas() {
   );
   const groupSimilarFormulas = useWorkbookStore((s) => s.groupSimilarFormulas);
   const setSelectedNode = useWorkbookStore((s) => s.setSelectedNode);
-  const applyOperations = useWorkbookStore((s) => s.applyOperations);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance<
     FlowNode,
@@ -303,7 +307,7 @@ export function GraphCanvas() {
     return (
       <section className="canvas-empty">
         <h2>No workbook loaded</h2>
-        <p>Upload a workbook to start visualizing cell dependencies.</p>
+        <p>Upload input and template workbooks to visualize the range pipeline graph.</p>
       </section>
     );
   }
@@ -317,7 +321,7 @@ export function GraphCanvas() {
         onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
         onlyRenderVisibleElements
-        nodesDraggable
+        nodesDraggable={false}
         fitView
         fitViewOptions={{ padding: 0.18 }}
         minZoom={0.25}
@@ -339,78 +343,7 @@ export function GraphCanvas() {
           setSelectedNode(null);
           setHoveredNodeId(null);
         }}
-        onNodeDragStop={(_event, draggedNode) => {
-          if (draggedNode.type !== "cellNode") {
-            return;
-          }
-
-          const source = workbook.nodes.find(
-            (node) => node.id === draggedNode.id,
-          );
-          if (!source) {
-            return;
-          }
-
-          const width = Number(draggedNode.width ?? 150);
-          const height = Number(draggedNode.height ?? 84);
-          const centerX = draggedNode.position.x + width / 2;
-          const centerY = draggedNode.position.y + height / 2;
-
-          let targetGroup: Node | undefined;
-          for (const group of sheetGroups) {
-            const groupWidth = Number(group.style?.width ?? group.width ?? 0);
-            const groupHeight = Number(
-              group.style?.height ?? group.height ?? 0,
-            );
-            const minX = group.position.x;
-            const minY = group.position.y;
-            const maxX = minX + groupWidth;
-            const maxY = minY + groupHeight;
-            if (
-              centerX >= minX &&
-              centerX <= maxX &&
-              centerY >= minY &&
-              centerY <= maxY
-            ) {
-              targetGroup = group;
-              break;
-            }
-          }
-
-          if (!targetGroup) {
-            return;
-          }
-
-          const targetData = targetGroup.data as
-            | { fileName?: string; sheet?: string }
-            | undefined;
-          const targetFileName = targetData?.fileName;
-          const targetSheet = targetData?.sheet;
-
-          if (!targetFileName || !targetSheet) {
-            return;
-          }
-
-          if (
-            source.fileName === targetFileName &&
-            source.sheet === targetSheet
-          ) {
-            return;
-          }
-
-          void applyOperations(
-            [
-              {
-                type: "MOVE_CELL",
-                fromNodeId: source.id,
-                toFileName: targetFileName,
-                toSheet: targetSheet,
-                toCell: source.cell,
-              },
-            ],
-            `Move ${source.id} to ${targetFileName}::${targetSheet}`,
-          );
-        }}
+        onNodeDragStop={undefined}
       >
         <MiniMap
           pannable

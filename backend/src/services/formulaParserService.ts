@@ -1,10 +1,11 @@
-import { CellReference } from "../models/graph";
+import { CellReference, RangeReference } from "../models/graph";
 import {
   expandRange,
   normalizeCellAddress,
   normalizeFileName,
   normalizeSheetName,
-  toNodeId
+  toCellKey,
+  encodeRange
 } from "../utils/cellUtils";
 
 const RANGE_REGEX = /((?:'[^']+'|\[[^\]]+\][^!]+|[A-Za-z0-9_\.]+)!\$?[A-Z]{1,3}\$?[0-9]+|\$?[A-Z]{1,3}\$?[0-9]+):((?:'[^']+'|\[[^\]]+\][^!]+|[A-Za-z0-9_\.]+)!\$?[A-Z]{1,3}\$?[0-9]+|\$?[A-Z]{1,3}\$?[0-9]+)/g;
@@ -52,6 +53,81 @@ function parseRef(ref: string, currentSheet: string, currentFileName: string): C
 }
 
 export class FormulaParserService {
+  /**
+   * Extracts range-level references from a formula.
+   * This is the primary method for building the range-based graph.
+   * Ranges are NOT expanded to individual cells.
+   */
+  extractRangeReferences(formula: string | undefined, currentSheet: string, currentFileName: string): RangeReference[] {
+    if (!formula || !formula.startsWith("=")) {
+      return [];
+    }
+
+    const body = formula.slice(1);
+    const refs = new Map<string, RangeReference>();
+
+    // Parse ranges - keep them as ranges
+    for (const match of body.matchAll(RANGE_REGEX)) {
+      const left = parseRef(match[1], currentSheet, currentFileName);
+      const right = parseRef(match[2], currentSheet, currentFileName);
+
+      if (left.file !== right.file || left.sheet !== right.sheet) {
+        // Cross-file/sheet range - treat as two separate references
+        const key1 = `${left.file}::${left.sheet}::${left.cell}`;
+        refs.set(key1, {
+          file: left.file,
+          sheet: left.sheet,
+          range: left.cell,
+          external: left.external,
+          original: match[1]
+        });
+        const key2 = `${right.file}::${right.sheet}::${right.cell}`;
+        refs.set(key2, {
+          file: right.file,
+          sheet: right.sheet,
+          range: right.cell,
+          external: right.external,
+          original: match[2]
+        });
+        continue;
+      }
+
+      // Same file/sheet - create a proper range reference
+      const range = encodeRange(left.cell, right.cell);
+      const key = `${left.file}::${left.sheet}::${range}`;
+      refs.set(key, {
+        file: left.file,
+        sheet: left.sheet,
+        range,
+        external: left.external,
+        original: match[0]
+      });
+    }
+
+    // Parse single cell references
+    const bodyWithoutRanges = body.replace(RANGE_REGEX, "");
+    for (const token of bodyWithoutRanges.match(REFERENCE_REGEX) ?? []) {
+      const parsed = parseRef(token, currentSheet, currentFileName);
+      const key = `${parsed.file}::${parsed.sheet}::${parsed.cell}`;
+      if (!refs.has(key)) {
+        refs.set(key, {
+          file: parsed.file,
+          sheet: parsed.sheet,
+          range: parsed.cell, // Single cell is a 1x1 range
+          external: parsed.external,
+          original: token
+        });
+      }
+    }
+
+    return [...refs.values()];
+  }
+
+  /**
+   * Extracts cell-level references from a formula.
+   * @internal Used for execution engine where per-cell values are needed.
+   * For graph building, use extractRangeReferences() instead.
+   */
   extractReferences(formula: string | undefined, currentSheet: string, currentFileName: string): CellReference[] {
     if (!formula || !formula.startsWith("=")) {
       return [];
@@ -93,9 +169,12 @@ export class FormulaParserService {
     return [...refs.values()];
   }
 
+  /**
+   * @deprecated Use node-level dependencies instead of cell-level IDs.
+   */
   extractDependencies(formula: string | undefined, currentSheet: string, currentFileName: string): string[] {
     return this.extractReferences(formula, currentSheet, currentFileName).map((ref) =>
-      toNodeId(ref.file, ref.sheet, ref.cell)
+      toCellKey(ref.file, ref.sheet, ref.cell)
     );
   }
 }

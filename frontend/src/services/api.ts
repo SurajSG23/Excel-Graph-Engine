@@ -52,6 +52,14 @@ export async function recomputeWorkbook(workbookId: string, updates: NodeUpdate[
   return data;
 }
 
+export async function runPipeline(workbookId: string, label?: string): Promise<WorkbookResponse> {
+  const { data } = await api.post<WorkbookResponse>("/run", {
+    workbookId,
+    label
+  });
+  return data;
+}
+
 export async function exportWorkbook(workbookId: string): Promise<Blob> {
   const { data } = await api.post("/export", { workbookId }, { responseType: "blob" });
   return data as Blob;
