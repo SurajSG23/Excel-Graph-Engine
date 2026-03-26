@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/main.tsx","./src/components/graphcanvas.tsx","./src/components/sidebar.tsx","./src/components/uploadcard.tsx","./src/services/api.ts","./src/store/workbookstore.ts","./src/types/workbook.ts"],"version":"5.9.3"}
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/graphcanvas.tsx","./src/components/rangenode.tsx","./src/components/sidebar.tsx","./src/components/uploadcard.tsx","./src/services/api.ts","./src/store/workbookstore.ts","./src/types/workbook.ts"],"errors":true,"version":"5.9.3"}

@@ -25,6 +25,13 @@ function textToRanges(value: string): PipelineRange[] {
     });
 }
 
+function displayWorkbookName(pathValue: string): string {
+  const normalized = pathValue.replace(/\\/g, "/");
+  const fileName = normalized.split("/").pop() ?? pathValue;
+  // Multer stores uploads as `<timestamp>-OriginalName.xlsx`; show only the original name.
+  return fileName.replace(/^\d+-/, "");
+}
+
 function columnToNumber(col: string): number {
   let total = 0;
   for (const ch of col.toUpperCase()) {
@@ -514,7 +521,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
 
               <div className="node-detail-block">
                 <h5>Source Workbook</h5>
-                <p>{workbook.config.input.filePath}</p>
+                <p>{displayWorkbookName(workbook.config.input.filePath)}</p>
               </div>
 
               <div className="node-detail-block">
@@ -609,7 +616,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
 
               <div className="node-detail-block">
                 <h5>Target Workbook</h5>
-                <p>{workbook.config.output.targetFilePath}</p>
+                <p>{displayWorkbookName(workbook.config.output.targetFilePath)}</p>
               </div>
 
               <div className="node-detail-block">
