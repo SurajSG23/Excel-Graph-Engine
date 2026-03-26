@@ -1,54 +1,36 @@
 import * as XLSX from "xlsx";
 import path from "node:path";
-import { GraphNode } from "../models/graph";
+import { ParsedWorkbookData, PipelineWorkbook } from "../models/pipeline";
+import { expandRange } from "../core/node_models";
 
 export class ExportService {
-  exportWorkbook(nodes: GraphNode[], workbookId: string, outputFileName: string): string {
-    const workbook = XLSX.utils.book_new();
-    const outputNodes = nodes.filter((node) => node.fileName === outputFileName);
-    const outputSheets = [...new Set(outputNodes.map((node) => node.sheet))];
+  exportWorkbook(workbook: PipelineWorkbook, parsed: ParsedWorkbookData): string {
+    const wb = XLSX.readFile(parsed.targetFilePath, { cellFormula: true });
 
-    for (const sheetName of outputSheets) {
-      const sheetNodes = outputNodes.filter((node) => node.sheet === sheetName);
-      const ws: XLSX.WorkSheet = {};
+    for (const node of workbook.config.formulas) {
+      const ws = wb.Sheets[node.output.sheet] ?? {};
+      wb.Sheets[node.output.sheet] = ws;
 
-      for (const node of sheetNodes) {
-        ws[node.cell] = this.toCellObject(node);
-      }
-
-      const addresses = sheetNodes.map((node) => XLSX.utils.decode_cell(node.cell));
-      if (addresses.length > 0) {
-        const maxCol = Math.max(...addresses.map((a) => a.c));
-        const maxRow = Math.max(...addresses.map((a) => a.r));
-        ws["!ref"] = XLSX.utils.encode_range({ s: { c: 0, r: 0 }, e: { c: maxCol, r: maxRow } });
-      }
-
-      XLSX.utils.book_append_sheet(workbook, ws, sheetName);
+      const outputCells = node.outputCells.length > 0 ? node.outputCells : expandRange(node.output.range);
+      const results = workbook.nodeResults[node.id] ?? [];
+      outputCells.forEach((cell, index) => {
+        ws[cell] = this.toCellObject(results[index]);
+      });
     }
 
-    const outPath = path.resolve(process.cwd(), "exports", `${workbookId}-export.xlsx`);
-    XLSX.writeFile(workbook, outPath);
-    return outPath;
+    const exportPath = path.resolve(process.cwd(), "exports", `pipeline-${workbook.workbookId}.xlsx`);
+    XLSX.writeFile(wb, exportPath);
+    return exportPath;
   }
 
-  private toCellObject(node: GraphNode): XLSX.CellObject {
-    const value = node.value;
-    const formulaBody = node.formula?.startsWith("=") ? node.formula.slice(1) : node.formula;
-
-    const cellType: XLSX.CellObject["t"] =
-      typeof value === "number" ? "n" : typeof value === "boolean" ? "b" : "s";
-
-    if (formulaBody) {
-      return {
-        t: cellType,
-        f: formulaBody,
-        v: value ?? ""
-      };
+  private toCellObject(value: string | number | boolean | undefined): XLSX.CellObject {
+    if (typeof value === "number") {
+      return { t: "n", v: value, w: String(value) };
     }
-
-    return {
-      t: cellType,
-      v: value ?? ""
-    };
+    if (typeof value === "boolean") {
+      return { t: "b", v: value, w: value ? "TRUE" : "FALSE" };
+    }
+    const text = value === undefined ? "" : String(value);
+    return { t: "s", v: text, w: text };
   }
 }

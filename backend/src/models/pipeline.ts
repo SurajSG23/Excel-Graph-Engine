@@ -5,6 +5,14 @@ export interface PipelineRange {
   range: string;
 }
 
+export interface InputNodeConfig {
+  id: "input";
+  name: "Input";
+  filePath: string;
+  sheets: string[];
+  ranges: PipelineRange[];
+}
+
 export interface FormulaNodeConfig {
   id: string;
   name: string;
@@ -16,21 +24,17 @@ export interface FormulaNodeConfig {
   outputCells: string[];
 }
 
+export interface OutputNodeConfig {
+  id: "output";
+  name: "Output";
+  targetFilePath: string;
+  ranges: PipelineRange[];
+}
+
 export interface PipelineConfig {
-  input: {
-    id: "input";
-    name: "Input";
-    filePath: string;
-    sheets: string[];
-    ranges: PipelineRange[];
-  };
+  input: InputNodeConfig;
   formulas: FormulaNodeConfig[];
-  output: {
-    id: "output";
-    name: "Output";
-    targetFilePath: string;
-    ranges: PipelineRange[];
-  };
+  output: OutputNodeConfig;
 }
 
 export interface PipelineGraphNode {
@@ -44,6 +48,11 @@ export interface PipelineGraphEdge {
   target: string;
 }
 
+export interface PipelineGraph {
+  nodes: PipelineGraphNode[];
+  edges: PipelineGraphEdge[];
+}
+
 export interface ValidationIssue {
   type: "INVALID_FORMULA" | "INVALID_RANGE" | "OVERLAPPING_OUTPUT" | "DEPENDENCY_CYCLE";
   nodeId?: string;
@@ -55,10 +64,7 @@ export interface PipelineWorkbook {
   workbookId: string;
   version: number;
   config: PipelineConfig;
-  graph: {
-    nodes: PipelineGraphNode[];
-    edges: PipelineGraphEdge[];
-  };
+  graph: PipelineGraph;
   validationIssues: ValidationIssue[];
   executionOrder: string[];
   nodeResults: Record<string, CellValue[]>;
@@ -71,13 +77,23 @@ export interface PipelineNodeUpdate {
   output?: PipelineRange;
 }
 
+export interface ParsedFormulaCell {
+  sheet: string;
+  cell: string;
+  formula: string;
+}
+
+export interface ParsedWorkbookData {
+  sourceFilePath: string;
+  sourceFileName: string;
+  targetFilePath: string;
+  sheetNames: string[];
+  formulaCells: ParsedFormulaCell[];
+  values: Record<string, Record<string, CellValue>>;
+}
+
 export interface VersionItem {
   version: number;
   timestamp: string;
   label: string;
-}
-
-export interface WorkbookResponse {
-  workbook: PipelineWorkbook;
-  versions: VersionItem[];
 }

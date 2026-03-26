@@ -1,19 +1,13 @@
-import { ExcelParserService } from "./excelParserService";
-import { FormulaParserService } from "./formulaParserService";
-import { GraphBuilderService } from "./graphBuilderService";
-import { ValidationService } from "./validationService";
-import { ExecutionEngineService } from "./executionEngineService";
+import { ExcelParser } from "../core/excel_parser";
+import { PipelineBuilder } from "../core/pipeline_builder";
+import { PipelineValidator } from "../core/pipeline_validator";
+import { ExecutionEngine } from "../core/execution_engine";
 import { WorkbookSessionService } from "./workbookSessionService";
 import { ExportService } from "./exportService";
-import { FileRegistryService } from "./fileRegistryService";
-import { WorkbookMutationService } from "./workbookMutationService";
 
-export const formulaParserService = new FormulaParserService();
-export const graphBuilderService = new GraphBuilderService(formulaParserService);
-export const excelParserService = new ExcelParserService();
-export const validationService = new ValidationService();
-export const executionEngineService = new ExecutionEngineService();
+export const excelParser = new ExcelParser();
+export const pipelineBuilder = new PipelineBuilder();
+export const pipelineValidator = new PipelineValidator();
+export const executionEngine = new ExecutionEngine();
 export const workbookSessionService = new WorkbookSessionService();
 export const exportService = new ExportService();
-export const fileRegistryService = new FileRegistryService();
-export const workbookMutationService = new WorkbookMutationService();

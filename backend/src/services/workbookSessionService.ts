@@ -1,19 +1,23 @@
 import { v4 as uuidv4 } from "uuid";
-import { WorkbookGraph } from "../models/graph";
+import { ParsedWorkbookData, PipelineWorkbook, VersionItem } from "../models/pipeline";
 
 interface WorkbookSession {
-  workbook: WorkbookGraph;
-  versions: Array<{ version: number; timestamp: string; label: string }>;
-  undoStack: WorkbookGraph[];
-  redoStack: WorkbookGraph[];
+  workbook: PipelineWorkbook;
+  parsedWorkbook: ParsedWorkbookData;
+  versions: VersionItem[];
+  undoStack: PipelineWorkbook[];
+  redoStack: PipelineWorkbook[];
 }
 
 export class WorkbookSessionService {
   private readonly sessions = new Map<string, WorkbookSession>();
 
-  createSession(workbook: Omit<WorkbookGraph, "workbookId" | "version">): WorkbookGraph {
+  createSession(
+    workbook: Omit<PipelineWorkbook, "workbookId" | "version">,
+    parsedWorkbook: ParsedWorkbookData
+  ): PipelineWorkbook {
     const workbookId = uuidv4();
-    const sessionWorkbook: WorkbookGraph = {
+    const sessionWorkbook: PipelineWorkbook = {
       ...workbook,
       workbookId,
       version: 1
@@ -21,6 +25,7 @@ export class WorkbookSessionService {
 
     this.sessions.set(workbookId, {
       workbook: sessionWorkbook,
+      parsedWorkbook,
       versions: [{ version: 1, timestamp: new Date().toISOString(), label: "Initial upload" }],
       undoStack: [],
       redoStack: []
@@ -35,9 +40,9 @@ export class WorkbookSessionService {
 
   updateWorkbook(
     workbookId: string,
-    nextWorkbook: Omit<WorkbookGraph, "version">,
+    nextWorkbook: Omit<PipelineWorkbook, "version">,
     label = "Recompute"
-  ): WorkbookGraph {
+  ): PipelineWorkbook {
     const session = this.sessions.get(workbookId);
     if (!session) {
       throw new Error("Workbook session not found.");
@@ -63,11 +68,20 @@ export class WorkbookSessionService {
     return updated;
   }
 
-  getVersions(workbookId: string): Array<{ version: number; timestamp: string; label: string }> {
+  setParsedWorkbook(workbookId: string, parsedWorkbook: ParsedWorkbookData): void {
+    const session = this.sessions.get(workbookId);
+    if (!session) {
+      throw new Error("Workbook session not found.");
+    }
+    session.parsedWorkbook = parsedWorkbook;
+    this.sessions.set(workbookId, session);
+  }
+
+  getVersions(workbookId: string): VersionItem[] {
     return this.sessions.get(workbookId)?.versions ?? [];
   }
 
-  undo(workbookId: string): WorkbookGraph {
+  undo(workbookId: string): PipelineWorkbook {
     const session = this.sessions.get(workbookId);
     if (!session) {
       throw new Error("Workbook session not found.");
@@ -95,7 +109,7 @@ export class WorkbookSessionService {
     return session.workbook;
   }
 
-  redo(workbookId: string): WorkbookGraph {
+  redo(workbookId: string): PipelineWorkbook {
     const session = this.sessions.get(workbookId);
     if (!session) {
       throw new Error("Workbook session not found.");

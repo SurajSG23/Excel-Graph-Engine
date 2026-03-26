@@ -1,89 +1,53 @@
 import { Request, Response } from "express";
+import fs from "node:fs";
 import {
-  excelParserService,
-  executionEngineService,
+  excelParser,
+  executionEngine,
   exportService,
-  fileRegistryService,
-  graphBuilderService,
-  validationService,
-  workbookMutationService,
+  pipelineBuilder,
+  pipelineValidator,
   workbookSessionService
 } from "../services/serviceContainer";
-import { NodeUpdate, ParsedWorkbook, WorkbookOperation, WorkbookRole } from "../models/graph";
+import { PipelineNodeUpdate, PipelineRange } from "../models/pipeline";
 
-interface UploadItem {
-  path: string;
-  originalname: string;
-  role: WorkbookRole;
-}
-
-function toRole(value: unknown): WorkbookRole | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "input" || normalized === "output") {
-    return normalized;
-  }
-  return null;
-}
-
-function collectUploads(req: Request): UploadItem[] {
+function resolveUploadPath(req: Request, field: string): string | undefined {
   const files = (req.files as Record<string, Express.Multer.File[]>) ?? {};
-  const entries: UploadItem[] = [];
-
-  for (const item of files.input ?? []) {
-    entries.push({
-      path: item.path,
-      originalname: item.originalname,
-      role: "input"
-    });
-  }
-
-  for (const item of files.output ?? []) {
-    entries.push({
-      path: item.path,
-      originalname: item.originalname,
-      role: "output"
-    });
-  }
-
-  for (const item of files.file ?? []) {
-    const role = toRole(req.body?.role);
-    entries.push({
-      path: item.path,
-      originalname: item.originalname,
-      role: role ?? "other"
-    });
-  }
-
-  return entries;
+  return files[field]?.[0]?.path;
 }
 
-function resolveOutputFileName(parsed: ParsedWorkbook[], fallback?: string): string {
-  return parsed.find((item) => item.fileRole === "output")?.fileName ?? fallback ?? parsed[0]?.fileName ?? "";
+function normalizeRanges(ranges: PipelineRange[] | undefined): PipelineRange[] | undefined {
+  if (!ranges) {
+    return undefined;
+  }
+
+  return ranges
+    .filter((item) => typeof item?.sheet === "string" && typeof item?.range === "string")
+    .map((item) => ({
+      sheet: item.sheet.trim(),
+      range: item.range.trim().toUpperCase()
+    }));
 }
 
 export class WorkbookController {
   uploadWorkbook(req: Request, res: Response): void {
     try {
-      const uploadItems = collectUploads(req);
-      if (uploadItems.length === 0) {
-        res.status(400).json({ message: "No file uploaded. Provide input/output files or a file with role=input|output." });
+      const inputPath = resolveUploadPath(req, "input") ?? resolveUploadPath(req, "file");
+      const outputPath = resolveUploadPath(req, "output");
+
+      if (!inputPath && !outputPath) {
+        res.status(400).json({ message: "No workbook uploaded." });
         return;
       }
 
-      for (const item of uploadItems) {
-        if (item.role === "other") {
-          res.status(400).json({ message: "Labeled upload must include role=input or role=output." });
-          return;
-        }
-      }
-
-      const parsedIncoming = uploadItems.map((item) =>
-        excelParserService.parseWorkbook(item.path, item.originalname, item.role)
-      );
+      const sourcePath = inputPath ?? outputPath!;
+      const targetPath = outputPath ?? sourcePath;
+      const parsed = excelParser.parse(sourcePath, targetPath);
+      const built = pipelineBuilder.build(parsed);
+      const ordered = built.executionOrder
+        .map((id) => built.config.formulas.find((item) => item.id === id))
+        .filter((item): item is NonNullable<typeof item> => Boolean(item));
+      const execution = executionEngine.execute(parsed, ordered);
+      const validationIssues = pipelineValidator.validate(built.config, built.executionOrder);
 
       const existingWorkbookId = typeof req.body?.workbookId === "string" ? req.body.workbookId : undefined;
 
@@ -94,56 +58,51 @@ export class WorkbookController {
           return;
         }
 
-        const mergedParsed = fileRegistryService.upsertFiles(existingWorkbookId, parsedIncoming);
-        const rebuilt = graphBuilderService.buildFromWorkbooks(mergedParsed);
-        const validationIssues = validationService.validate(rebuilt.nodes, rebuilt.files);
-        const computed = executionEngineService.recompute(rebuilt.nodes);
-        const outputFileName = resolveOutputFileName(mergedParsed, session.workbook.outputFileName);
-
-        const updatedWorkbook = workbookSessionService.updateWorkbook(
+        const workbook = workbookSessionService.updateWorkbook(
           existingWorkbookId,
           {
             workbookId: existingWorkbookId,
-            nodes: computed.nodes,
-            edges: rebuilt.edges,
-            sheets: rebuilt.sheets,
-            files: rebuilt.files,
-            outputFileName,
-            validationIssues: [...validationIssues, ...computed.issues]
+            config: built.config,
+            graph: built.graph,
+            validationIssues,
+            executionOrder: built.executionOrder,
+            nodeResults: execution.nodeResults
           },
           "Upload workbook"
         );
+        workbookSessionService.setParsedWorkbook(existingWorkbookId, {
+          ...parsed,
+          values: execution.values
+        });
 
         res.status(200).json({
-          workbook: updatedWorkbook,
+          workbook,
           versions: workbookSessionService.getVersions(existingWorkbookId)
         });
         return;
       }
 
-      const initial = graphBuilderService.buildFromWorkbooks(parsedIncoming);
-      const validationIssues = validationService.validate(initial.nodes, initial.files);
-      const computed = executionEngineService.recompute(initial.nodes);
-      const outputFileName = resolveOutputFileName(parsedIncoming);
-
-      const created = workbookSessionService.createSession({
-        nodes: computed.nodes,
-        edges: initial.edges,
-        sheets: initial.sheets,
-        files: initial.files,
-        outputFileName,
-        validationIssues: [...validationIssues, ...computed.issues]
-      });
-
-      fileRegistryService.upsertFiles(created.workbookId, parsedIncoming);
+      const workbook = workbookSessionService.createSession(
+        {
+          config: built.config,
+          graph: built.graph,
+          validationIssues,
+          executionOrder: built.executionOrder,
+          nodeResults: execution.nodeResults
+        },
+        {
+          ...parsed,
+          values: execution.values
+        }
+      );
 
       res.status(200).json({
-        workbook: created,
-        versions: workbookSessionService.getVersions(created.workbookId)
+        workbook,
+        versions: workbookSessionService.getVersions(workbook.workbookId)
       });
     } catch (error) {
       res.status(500).json({
-        message: "Failed to parse workbook.",
+        message: "Failed to build pipeline from workbook.",
         detail: error instanceof Error ? error.message : "Unknown error"
       });
     }
@@ -153,7 +112,7 @@ export class WorkbookController {
     try {
       const { workbookId, updates, label } = req.body as {
         workbookId?: string;
-        updates?: NodeUpdate[];
+        updates?: PipelineNodeUpdate[];
         label?: string;
       };
 
@@ -168,110 +127,111 @@ export class WorkbookController {
         return;
       }
 
-      const changedNodeIds: string[] = [];
-      const nodeMap = new Map(session.workbook.nodes.map((node) => [node.id, { ...node }]));
-
-      for (const update of updates ?? []) {
-        const target = nodeMap.get(update.id);
-        if (!target) {
-          continue;
+      const nextFormulas = session.workbook.config.formulas.map((node) => {
+        const patch = updates?.find((item) => item.id === node.id);
+        if (!patch) {
+          return node;
         }
 
-        if (typeof update.formula === "string") {
-          target.formula = update.formula.trim() === "" ? undefined : update.formula;
-          changedNodeIds.push(target.id);
+        const formula = typeof patch.formula === "string" ? patch.formula.trim() : node.formula;
+        const inputs = normalizeRanges(patch.inputs) ?? node.inputs;
+        const output = patch.output
+          ? {
+              sheet: patch.output.sheet.trim(),
+              range: patch.output.range.trim().toUpperCase()
+            }
+          : node.output;
+
+        return {
+          ...node,
+          formula,
+          inputs,
+          output,
+          outputCells: output.range
+            .split(",")
+            .map((segment) => segment.trim())
+            .filter(Boolean)
+            .flatMap((segment) => {
+              const [left, right] = segment.includes(":")
+                ? (segment.split(":") as [string, string])
+                : ([segment, segment] as [string, string]);
+              const [lCol, lRow] = [left.replace(/[0-9]/g, ""), Number(left.replace(/[A-Z]/g, ""))];
+              const [rCol, rRow] = [right.replace(/[0-9]/g, ""), Number(right.replace(/[A-Z]/g, ""))];
+              if (!lCol || !rCol || !Number.isFinite(lRow) || !Number.isFinite(rRow)) {
+                return [] as string[];
+              }
+              const colToNum = (col: string): number => {
+                let total = 0;
+                for (const ch of col) {
+                  total = total * 26 + (ch.charCodeAt(0) - 64);
+                }
+                return total;
+              };
+              const numToCol = (num: number): string => {
+                let n = num;
+                let out = "";
+                while (n > 0) {
+                  const rem = (n - 1) % 26;
+                  out = String.fromCharCode(65 + rem) + out;
+                  n = Math.floor((n - 1) / 26);
+                }
+                return out;
+              };
+              const minCol = Math.min(colToNum(lCol), colToNum(rCol));
+              const maxCol = Math.max(colToNum(lCol), colToNum(rCol));
+              const minRow = Math.min(lRow, rRow);
+              const maxRow = Math.max(lRow, rRow);
+              const cells: string[] = [];
+              for (let row = minRow; row <= maxRow; row += 1) {
+                for (let col = minCol; col <= maxCol; col += 1) {
+                  cells.push(`${numToCol(col)}${row}`);
+                }
+              }
+              return cells;
+            })
+        };
+      });
+
+      const rebuilt = pipelineBuilder.rebuild({
+        ...session.workbook.config,
+        formulas: nextFormulas,
+        output: {
+          ...session.workbook.config.output,
+          ranges: nextFormulas.map((item) => item.output)
         }
+      });
 
-        if (
-          typeof update.value === "number" ||
-          typeof update.value === "string" ||
-          typeof update.value === "boolean"
-        ) {
-          target.value = update.value;
-          if (!changedNodeIds.includes(target.id)) {
-            changedNodeIds.push(target.id);
-          }
-        }
+      const ordered = rebuilt.executionOrder
+        .map((id) => rebuilt.config.formulas.find((item) => item.id === id))
+        .filter((item): item is NonNullable<typeof item> => Boolean(item));
+      const execution = executionEngine.execute(session.parsedWorkbook, ordered, session.parsedWorkbook.values);
+      const validationIssues = pipelineValidator.validate(rebuilt.config, rebuilt.executionOrder);
 
-        nodeMap.set(target.id, target);
-      }
-
-      const rebuilt = graphBuilderService.rebuildFromNodes([...nodeMap.values()], session.workbook.files);
-      const validationIssues = validationService.validate(rebuilt.nodes, rebuilt.files);
-      const computed = executionEngineService.recompute(rebuilt.nodes, changedNodeIds);
-
-      const updatedWorkbook = workbookSessionService.updateWorkbook(
+      const workbook = workbookSessionService.updateWorkbook(
         workbookId,
         {
           workbookId,
-          ...rebuilt,
-          outputFileName: session.workbook.outputFileName,
-          validationIssues: [...validationIssues, ...computed.issues],
-          nodes: computed.nodes
+          config: rebuilt.config,
+          graph: rebuilt.graph,
+          validationIssues,
+          executionOrder: rebuilt.executionOrder,
+          nodeResults: execution.nodeResults
         },
-        label || "Formula edit"
+        label ?? "Edit formula node"
       );
 
+      workbookSessionService.setParsedWorkbook(workbookId, {
+        ...session.parsedWorkbook,
+        values: execution.values
+      });
+
       res.status(200).json({
-        workbook: updatedWorkbook,
+        workbook,
         versions: workbookSessionService.getVersions(workbookId)
       });
     } catch (error) {
       res.status(500).json({
-        message: "Failed to recompute workbook.",
-        detail: error instanceof Error ? error.message : "Unknown error"
-      });
-    }
-  }
-
-  applyOperations(req: Request, res: Response): void {
-    try {
-      const { workbookId, operations, label } = req.body as {
-        workbookId?: string;
-        operations?: WorkbookOperation[];
-        label?: string;
-      };
-
-      if (!workbookId) {
-        res.status(400).json({ message: "workbookId is required." });
-        return;
-      }
-
-      if (!Array.isArray(operations) || operations.length === 0) {
-        res.status(400).json({ message: "operations array is required." });
-        return;
-      }
-
-      const session = workbookSessionService.getSession(workbookId);
-      if (!session) {
-        res.status(404).json({ message: "Workbook not found." });
-        return;
-      }
-
-      const mutated = workbookMutationService.applyOperations(session.workbook, operations);
-      const rebuilt = graphBuilderService.rebuildFromNodes(mutated.nodes, mutated.files);
-      const validationIssues = validationService.validate(rebuilt.nodes, rebuilt.files);
-      const computed = executionEngineService.recompute(rebuilt.nodes, mutated.changedNodeIds);
-
-      const updatedWorkbook = workbookSessionService.updateWorkbook(
-        workbookId,
-        {
-          workbookId,
-          ...rebuilt,
-          outputFileName: session.workbook.outputFileName,
-          validationIssues: [...validationIssues, ...computed.issues],
-          nodes: computed.nodes
-        },
-        label || "Spreadsheet operation"
-      );
-
-      res.status(200).json({
-        workbook: updatedWorkbook,
-        versions: workbookSessionService.getVersions(workbookId)
-      });
-    } catch (error) {
-      res.status(500).json({
-        message: "Failed to apply operations.",
+        message: "Failed to recompute pipeline.",
         detail: error instanceof Error ? error.message : "Unknown error"
       });
     }
@@ -313,7 +273,7 @@ export class WorkbookController {
       });
     } catch (error) {
       res.status(400).json({
-        message: "You're on the latest version.",
+        message: "You are on the latest version.",
         detail: error instanceof Error ? error.message : "Unknown error"
       });
     }
@@ -333,13 +293,13 @@ export class WorkbookController {
         return;
       }
 
-      const exportPath = exportService.exportWorkbook(
-        session.workbook.nodes,
-        workbookId,
-        session.workbook.outputFileName
-      );
+      if (!fs.existsSync(session.parsedWorkbook.targetFilePath)) {
+        res.status(400).json({ message: "Target workbook file is missing on disk." });
+        return;
+      }
 
-      res.download(exportPath, `excel-graph-engine-${workbookId}.xlsx`);
+      const exportPath = exportService.exportWorkbook(session.workbook, session.parsedWorkbook);
+      res.download(exportPath, `pipeline-${workbookId}.xlsx`);
     } catch (error) {
       res.status(500).json({
         message: "Failed to export workbook.",
