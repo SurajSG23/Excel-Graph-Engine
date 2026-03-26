@@ -307,6 +307,47 @@ export class WorkbookController {
       });
     }
   }
+
+  runPipeline(req: Request, res: Response): void {
+    try {
+      const { workbookId, label } = req.body as { workbookId?: string; label?: string };
+      if (!workbookId) {
+        res.status(400).json({ message: "workbookId is required." });
+        return;
+      }
+
+      const session = workbookSessionService.getSession(workbookId);
+      if (!session) {
+        res.status(404).json({ message: "Workbook not found." });
+        return;
+      }
+
+      const computed = executionEngineService.recompute(session.workbook.nodes);
+      const validationIssues = validationService.validate(computed.nodes, session.workbook.files);
+
+      const updatedWorkbook = workbookSessionService.updateWorkbook(
+        workbookId,
+        {
+          ...session.workbook,
+          workbookId,
+          nodes: computed.nodes,
+          templateMappings: templateMappingService.deriveFromNodes(computed.nodes),
+          validationIssues: [...validationIssues, ...computed.issues]
+        },
+        label || "Run pipeline"
+      );
+
+      res.status(200).json({
+        workbook: updatedWorkbook,
+        versions: workbookSessionService.getVersions(workbookId)
+      });
+    } catch (error) {
+      res.status(500).json({
+        message: "Failed to run pipeline.",
+        detail: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  }
 }
 
 export const workbookController = new WorkbookController();
