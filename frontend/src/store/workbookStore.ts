@@ -28,7 +28,7 @@ interface WorkbookState {
   updateFormulaNode: (
     update: PipelineNodeUpdate,
     label?: string,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
   triggerExport: () => Promise<void>;
@@ -87,7 +87,7 @@ export const useWorkbookStore = create<WorkbookState>((set, get) => ({
   async updateFormulaNode(update, label) {
     const workbookId = get().workbook?.workbookId;
     if (!workbookId) {
-      return;
+      return false;
     }
 
     set({ loading: true, error: null });
@@ -102,11 +102,13 @@ export const useWorkbookStore = create<WorkbookState>((set, get) => ({
         versions: response.versions,
         loading: false,
       });
+      return true;
     } catch (error) {
       set({
         loading: false,
         error: extractErrorMessage(error, "Recompute failed"),
       });
+      return false;
     }
   },
 

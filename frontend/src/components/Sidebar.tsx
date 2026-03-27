@@ -379,6 +379,35 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
     return workbook.executionOrder.indexOf(formulaNode.id);
   }, [formulaNode, workbook]);
 
+  const selectableSheets = useMemo(() => {
+    if (!workbook) {
+      return [] as string[];
+    }
+
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+
+    for (const sheet of workbook.config.input.sheets) {
+      if (!seen.has(sheet)) {
+        seen.add(sheet);
+        ordered.push(sheet);
+      }
+    }
+
+    for (const item of workbook.config.output.ranges) {
+      if (!seen.has(item.sheet)) {
+        seen.add(item.sheet);
+        ordered.push(item.sheet);
+      }
+    }
+
+    if (formulaNode?.output.sheet && !seen.has(formulaNode.output.sheet)) {
+      ordered.push(formulaNode.output.sheet);
+    }
+
+    return ordered;
+  }, [formulaNode, workbook]);
+
   const inputEquationGroups = useMemo(() => {
     if (!workbook) {
       return [] as Array<{
@@ -410,6 +439,7 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
   const [outputSheetText, setOutputSheetText] = useState("");
   const [outputRangeText, setOutputRangeText] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const [formStatus, setFormStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
     if (!formulaNode) {
@@ -417,6 +447,7 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
       setInputRangesText("");
       setOutputRangeText("");
       setFormError(null);
+      setFormStatus(null);
       return;
     }
 
@@ -425,6 +456,7 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
     setOutputSheetText(formulaNode.output.sheet);
     setOutputRangeText(formulaNode.output.range);
     setFormError(null);
+    setFormStatus(null);
   }, [formulaNode]);
 
   const onSubmit = async (event: FormEvent): Promise<void> => {
@@ -436,6 +468,7 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
     const formula = formulaText.trim();
     if (!formula.startsWith("=")) {
       setFormError("Formula must start with '='.");
+      setFormStatus(null);
       return;
     }
 
@@ -445,11 +478,13 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
 
     if (!range || !sheet) {
       setFormError("Output range must be in Sheet!A1:B3 format.");
+      setFormStatus(null);
       return;
     }
 
     setFormError(null);
-    await updateFormulaNode({
+    setFormStatus(null);
+    const ok = await updateFormulaNode({
       id: formulaNode.id,
       formula,
       inputs,
@@ -457,6 +492,20 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
         sheet: sheet.trim(),
         range: range.trim().toUpperCase()
       }
+    });
+
+    if (ok) {
+      setFormStatus({
+        type: "success",
+        message: "Validate + Recompute completed successfully."
+      });
+      return;
+    }
+
+    const latestError = useWorkbookStore.getState().error;
+    setFormStatus({
+      type: "error",
+      message: latestError ?? "Validate + Recompute failed. Please check formula/range and try again."
     });
   };
 
@@ -798,12 +847,18 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
                 <div className="range-editor-grid">
                   <div className="range-editor-field">
                     <label htmlFor="formula-output-sheet">Sheet</label>
-                    <input
+                    <select
                       id="formula-output-sheet"
                       value={outputSheetText}
                       onChange={(event) => setOutputSheetText(event.target.value)}
-                      placeholder="Summary"
-                    />
+                    >
+                      {selectableSheets.length === 0 && <option value="">No sheets available</option>}
+                      {selectableSheets.map((sheetName) => (
+                        <option key={sheetName} value={sheetName}>
+                          {sheetName}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="range-editor-field">
                     <label htmlFor="formula-output-range">Range</label>
@@ -817,6 +872,9 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
                 </div>
 
                 {formError && <div className="error-banner">{formError}</div>}
+                {formStatus && (
+                  <div className={`form-status-banner form-status-${formStatus.type}`}>{formStatus.message}</div>
+                )}
                 <button type="submit" disabled={loading}>Validate + Recompute</button>
               </form>
             </div>
