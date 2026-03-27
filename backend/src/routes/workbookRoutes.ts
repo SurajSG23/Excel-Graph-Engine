@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import path from "node:path";
 import fs from "node:fs";
-import { workbookController } from "../controllers/workbookController";
+import { workbookController } from "..//controllers/workbookController";
 
 const router = Router();
 

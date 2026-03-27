@@ -8,6 +8,7 @@ type ValueMap = Record<string, SheetValues>;
 interface ExecuteResult {
   values: ValueMap;
   nodeResults: Record<string, CellValue[]>;
+  issues: Array<{ nodeId: string; message: string }>;
 }
 
 function cloneValues(values: ValueMap): ValueMap {
@@ -129,6 +130,7 @@ export class ExecutionEngine {
   execute(parsed: ParsedWorkbookData, formulasInOrder: FormulaNodeConfig[], configValues?: ValueMap): ExecuteResult {
     const values = cloneValues(configValues ?? parsed.values);
     const nodeResults: Record<string, CellValue[]> = {};
+    const issues: Array<{ nodeId: string; message: string }> = [];
 
     for (const node of formulasInOrder) {
       const outputCells = node.outputCells.length > 0 ? node.outputCells : expandRange(node.output.range);
@@ -136,7 +138,17 @@ export class ExecutionEngine {
 
       for (const outCell of outputCells) {
         const translated = translateFormula(node.formula, node.anchorCell, outCell, node.output.sheet);
-        const value = evaluateFormula(translated, node.output.sheet, values);
+        let value: CellValue = 0;
+        try {
+          value = evaluateFormula(translated, node.output.sheet, values);
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : "Unknown formula evaluation error";
+          issues.push({
+            nodeId: node.id,
+            message: `${node.name} failed at ${node.output.sheet}!${outCell}: ${detail}`
+          });
+          value = 0;
+        }
         if (!values[node.output.sheet]) {
           values[node.output.sheet] = {};
         }
@@ -147,6 +159,6 @@ export class ExecutionEngine {
       nodeResults[node.id] = computed;
     }
 
-    return { values, nodeResults };
+    return { values, nodeResults, issues };
   }
 }

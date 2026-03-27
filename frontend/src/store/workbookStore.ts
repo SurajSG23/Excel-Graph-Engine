@@ -1,6 +1,18 @@
 import { create } from "zustand";
-import { exportWorkbook, recomputeWorkbook, redoWorkbook, undoWorkbook, uploadWorkbook } from "../services/api";
-import { FormulaNodeConfig, PipelineNodeUpdate, PipelineWorkbook, VersionItem } from "../types/workbook";
+import {
+  exportWorkbook,
+  recomputeWorkbook,
+  runPipeline as runPipelineRequest,
+  redoWorkbook,
+  undoWorkbook,
+  uploadWorkbook,
+} from "../services/api";
+import {
+  FormulaNodeConfig,
+  PipelineNodeUpdate,
+  PipelineWorkbook,
+  VersionItem,
+} from "../types/workbook";
 
 interface WorkbookState {
   workbook: PipelineWorkbook | null;
@@ -8,9 +20,15 @@ interface WorkbookState {
   selectedNodeId: string | null;
   loading: boolean;
   error: string | null;
-  uploadFiles: (payload: { inputFile?: File; outputFile?: File }) => Promise<void>;
+  uploadFiles: (payload: {
+    inputFile?: File;
+    outputFile?: File;
+  }) => Promise<void>;
   setSelectedNode: (id: string | null) => void;
-  updateFormulaNode: (update: PipelineNodeUpdate, label?: string) => Promise<void>;
+  updateFormulaNode: (
+    update: PipelineNodeUpdate,
+    label?: string,
+  ) => Promise<void>;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
   triggerExport: () => Promise<void>;
@@ -18,7 +36,12 @@ interface WorkbookState {
 }
 
 function extractErrorMessage(error: unknown, fallback: string): string {
-  if (error && typeof error === "object" && "response" in error && (error as any).response?.data) {
+  if (
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    (error as any).response?.data
+  ) {
     const payload = (error as any).response.data;
     if (typeof payload === "string") return payload;
     if (payload?.message) return String(payload.message);
@@ -40,19 +63,19 @@ export const useWorkbookStore = create<WorkbookState>((set, get) => ({
       const response = await uploadWorkbook({
         workbookId: get().workbook?.workbookId,
         inputFile: payload.inputFile,
-        outputFile: payload.outputFile
+        outputFile: payload.outputFile,
       });
 
       set({
         workbook: response.workbook,
         versions: response.versions,
         selectedNodeId: null,
-        loading: false
+        loading: false,
       });
     } catch (error) {
       set({
         loading: false,
-        error: extractErrorMessage(error, "Upload failed")
+        error: extractErrorMessage(error, "Upload failed"),
       });
     }
   },
@@ -69,14 +92,21 @@ export const useWorkbookStore = create<WorkbookState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      const response = await recomputeWorkbook(workbookId, [update], label ?? "Edit formula node");
+      const response = await recomputeWorkbook(
+        workbookId,
+        [update],
+        label ?? "Edit formula node",
+      );
       set({
         workbook: response.workbook,
         versions: response.versions,
-        loading: false
+        loading: false,
       });
     } catch (error) {
-      set({ loading: false, error: extractErrorMessage(error, "Recompute failed") });
+      set({
+        loading: false,
+        error: extractErrorMessage(error, "Recompute failed"),
+      });
     }
   },
 
@@ -89,7 +119,11 @@ export const useWorkbookStore = create<WorkbookState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const response = await undoWorkbook(workbookId);
-      set({ workbook: response.workbook, versions: response.versions, loading: false });
+      set({
+        workbook: response.workbook,
+        versions: response.versions,
+        loading: false,
+      });
     } catch (error) {
       set({ loading: false, error: extractErrorMessage(error, "Undo failed") });
     }
@@ -104,13 +138,17 @@ export const useWorkbookStore = create<WorkbookState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const response = await redoWorkbook(workbookId);
-      set({ workbook: response.workbook, versions: response.versions, loading: false });
+      set({
+        workbook: response.workbook,
+        versions: response.versions,
+        loading: false,
+      });
     } catch (error) {
       set({ loading: false, error: extractErrorMessage(error, "Redo failed") });
     }
   },
 
-  async runPipeline(label) {
+  async runPipeline(label?: string) {
     const workbookId = get().workbook?.workbookId;
     if (!workbookId) {
       return;
@@ -122,12 +160,12 @@ export const useWorkbookStore = create<WorkbookState>((set, get) => ({
       set({
         workbook: response.workbook,
         versions: response.versions,
-        loading: false
+        loading: false,
       });
     } catch (error) {
       set({
         loading: false,
-        error: error instanceof Error ? error.message : "Pipeline run failed"
+        error: error instanceof Error ? error.message : "Pipeline run failed",
       });
     }
   },
@@ -149,7 +187,10 @@ export const useWorkbookStore = create<WorkbookState>((set, get) => ({
       URL.revokeObjectURL(url);
       set({ loading: false });
     } catch (error) {
-      set({ loading: false, error: extractErrorMessage(error, "Export failed") });
+      set({
+        loading: false,
+        error: extractErrorMessage(error, "Export failed"),
+      });
     }
   },
 
@@ -158,6 +199,9 @@ export const useWorkbookStore = create<WorkbookState>((set, get) => ({
     if (!selected) {
       return null;
     }
-    return get().workbook?.config.formulas.find((item) => item.id === selected) ?? null;
-  }
+    return (
+      get().workbook?.config.formulas.find((item) => item.id === selected) ??
+      null
+    );
+  },
 }));

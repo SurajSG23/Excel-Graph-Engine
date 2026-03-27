@@ -6,6 +6,7 @@ import { PipelineRange } from "../types/workbook";
 interface SidebarProps {
   isOpen: boolean;
   onToggle: () => void;
+  onResizeStart: () => void;
 }
 
 function rangesToText(ranges: PipelineRange[]): string {
@@ -157,7 +158,7 @@ function expandRangeCells(rangeText: string): string[] {
   return out;
 }
 
-export function Sidebar({ isOpen, onToggle }: SidebarProps) {
+export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
   const workbook = useWorkbookStore((s) => s.workbook);
   const selectedNodeId = useWorkbookStore((s) => s.selectedNodeId);
   const loading = useWorkbookStore((s) => s.loading);
@@ -686,7 +687,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
           {formulaNode && (
             <div className="node-details node-details-formula">
               <h4>Formula Node Details</h4>
-              <p className="node-details-lead">
+              {/* <p className="node-details-lead">
                 This node transforms input range values into output range values using the configured formula pattern.
               </p>
 
@@ -707,7 +708,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
                   <span>Output Cells</span>
                   <strong>{formulaNode.outputCells.length}</strong>
                 </div>
-              </div>
+              </div> */}
 
               <div className="node-detail-block">
                 <h5>Current Formula</h5>
@@ -842,6 +843,17 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
           </section>
         )}
       </div>
+      <button
+        type="button"
+        className="sidebar-resize-handle"
+        onPointerDown={(event) => {
+          if (event.pointerType === "mouse" || event.pointerType === "pen") {
+            event.preventDefault();
+          }
+          onResizeStart();
+        }}
+        aria-label="Resize sidebar"
+      />
     </aside>
   );
 }

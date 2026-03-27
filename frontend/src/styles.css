@@ -47,20 +47,59 @@ body {
   display: flex;
   height: 100vh;
   width: 100%;
+  --sidebar-width: 380px;
 }
 
 .dashboard-sidebar {
-  width: clamp(300px, 30vw, 450px);
+  width: var(--sidebar-width);
   background: linear-gradient(180deg, #fdfefe, #f6fbf8);
   border-right: 1px solid #d5e6db;
   box-shadow: 6px 0 20px rgba(15, 23, 42, 0.08);
   z-index: 10;
   display: flex;
   flex-direction: column;
+  position: relative;
   transition:
     transform 200ms ease,
     width 200ms ease,
     opacity 160ms ease;
+}
+
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -6px;
+  width: 12px;
+  height: 100%;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 14;
+}
+
+.sidebar-resize-handle::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 5px;
+  width: 2px;
+  background: linear-gradient(180deg, #d5e6db, #9ccab1, #d5e6db);
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.dashboard-sidebar:hover .sidebar-resize-handle::before,
+.dashboard-shell.sidebar-resizing .sidebar-resize-handle::before {
+  opacity: 1;
+}
+
+.dashboard-shell.sidebar-resizing,
+.dashboard-shell.sidebar-resizing * {
+  cursor: col-resize !important;
+  user-select: none;
 }
 
 .sidebar-header {
@@ -2002,6 +2041,10 @@ button:hover {
     max-width: min(92vw, 360px);
     width: min(92vw, 360px);
     transform: translateX(-104%);
+  }
+
+  .sidebar-resize-handle {
+    display: none;
   }
 
   .dashboard-shell.sidebar-open .dashboard-sidebar {

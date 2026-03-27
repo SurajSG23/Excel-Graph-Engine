@@ -47,7 +47,14 @@ export class WorkbookController {
         .map((id) => built.config.formulas.find((item) => item.id === id))
         .filter((item): item is NonNullable<typeof item> => Boolean(item));
       const execution = executionEngine.execute(parsed, ordered);
-      const validationIssues = pipelineValidator.validate(built.config, built.executionOrder);
+      const validationIssues = [
+        ...pipelineValidator.validate(built.config, built.executionOrder),
+        ...execution.issues.map((issue) => ({
+          type: "INVALID_FORMULA" as const,
+          nodeId: issue.nodeId,
+          message: issue.message
+        }))
+      ];
 
       const existingWorkbookId = typeof req.body?.workbookId === "string" ? req.body.workbookId : undefined;
 
@@ -205,7 +212,14 @@ export class WorkbookController {
         .map((id) => rebuilt.config.formulas.find((item) => item.id === id))
         .filter((item): item is NonNullable<typeof item> => Boolean(item));
       const execution = executionEngine.execute(session.parsedWorkbook, ordered, session.parsedWorkbook.values);
-      const validationIssues = pipelineValidator.validate(rebuilt.config, rebuilt.executionOrder);
+      const validationIssues = [
+        ...pipelineValidator.validate(rebuilt.config, rebuilt.executionOrder),
+        ...execution.issues.map((issue) => ({
+          type: "INVALID_FORMULA" as const,
+          nodeId: issue.nodeId,
+          message: issue.message
+        }))
+      ];
 
       const workbook = workbookSessionService.updateWorkbook(
         workbookId,
