@@ -28,6 +28,7 @@ export interface OutputNodeConfig {
   id: "output";
   name: "Output";
   targetFilePath: string;
+  sheets: string[];
   ranges: PipelineRange[];
 }
 
@@ -88,6 +89,7 @@ export interface ParsedWorkbookData {
   sourceFileName: string;
   targetFilePath: string;
   sheetNames: string[];
+  targetSheetNames: string[];
   formulaCells: ParsedFormulaCell[];
   values: Record<string, Record<string, CellValue>>;
 }

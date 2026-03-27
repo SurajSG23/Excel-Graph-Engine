@@ -29,6 +29,7 @@ export interface PipelineConfig {
     id: "output";
     name: "Output";
     targetFilePath: string;
+    sheets: string[];
     ranges: PipelineRange[];
   };
 }

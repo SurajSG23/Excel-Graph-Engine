@@ -5,6 +5,11 @@ import { CellValue, ParsedWorkbookData } from "../models/pipeline";
 export class ExcelParser {
   parse(sourceFilePath: string, targetFilePath?: string): ParsedWorkbookData {
     const workbook = XLSX.readFile(sourceFilePath, { cellFormula: true, cellNF: false, cellText: false });
+    const resolvedTargetPath = targetFilePath ?? sourceFilePath;
+    const targetWorkbook =
+      resolvedTargetPath !== sourceFilePath
+        ? XLSX.readFile(resolvedTargetPath, { cellFormula: true, cellNF: false, cellText: false })
+        : workbook;
     const values: Record<string, Record<string, CellValue>> = {};
     const formulaCells: ParsedWorkbookData["formulaCells"] = [];
 
@@ -40,8 +45,9 @@ export class ExcelParser {
     return {
       sourceFilePath,
       sourceFileName: path.basename(sourceFilePath),
-      targetFilePath: targetFilePath ?? sourceFilePath,
+      targetFilePath: resolvedTargetPath,
       sheetNames: workbook.SheetNames,
+      targetSheetNames: targetWorkbook.SheetNames,
       formulaCells,
       values
     };

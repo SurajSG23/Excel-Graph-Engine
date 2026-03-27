@@ -523,6 +523,13 @@ button:hover {
   height: 100%;
 }
 
+.canvas-shell .react-flow__pane,
+.canvas-shell .react-flow__pane.draggable,
+.canvas-shell .react-flow__pane.selection,
+.canvas-shell .react-flow__pane.dragging {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='7' fill='none' stroke='%23000000' stroke-width='1.8'/%3E%3Ccircle cx='12' cy='12' r='1.9' fill='%23000000'/%3E%3C/svg%3E") 12 12, crosshair;
+}
+
 
 .canvas-shell .react-flow__node {
   cursor: pointer;

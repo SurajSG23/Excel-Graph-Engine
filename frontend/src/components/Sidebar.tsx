@@ -284,6 +284,14 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
     };
   }, [workbook]);
 
+  const outputSheetList = useMemo(() => {
+    if (!workbook) {
+      return [] as string[];
+    }
+
+    return workbook.config.output.sheets;
+  }, [workbook]);
+
   const outputDependencyRows = useMemo(() => {
     if (!workbook) {
       return [] as Array<{
@@ -387,14 +395,14 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
     const seen = new Set<string>();
     const ordered: string[] = [];
 
-    for (const sheet of workbook.config.input.sheets) {
+    for (const sheet of workbook.config.output.sheets) {
       if (!seen.has(sheet)) {
         seen.add(sheet);
         ordered.push(sheet);
       }
     }
 
-    for (const item of workbook.config.output.ranges) {
+    for (const item of workbook.config.input.ranges) {
       if (!seen.has(item.sheet)) {
         seen.add(item.sheet);
         ordered.push(item.sheet);
@@ -648,7 +656,7 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
               <div className="node-detail-metrics">
                 <div>
                   <span>Target Sheets</span>
-                  <strong>{outputSheetDetails.length}</strong>
+                  <strong>{outputSheetList.length}</strong>
                 </div>
                 <div>
                   <span>Output Ranges</span>
@@ -667,6 +675,19 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
               <div className="node-detail-block">
                 <h5>Target Workbook</h5>
                 <p>{displayWorkbookName(workbook.config.output.targetFilePath)}</p>
+              </div>
+
+              <div className="node-detail-block">
+                <h5>Target Workbook Sheets</h5>
+                {outputSheetList.length === 0 ? (
+                  <p>No target sheets detected.</p>
+                ) : (
+                  <ul>
+                    {outputSheetList.map((sheet) => (
+                      <li key={`target-sheet:${sheet}`}>{sheet}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               <div className="node-detail-block">

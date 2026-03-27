@@ -135,6 +135,7 @@ export class PipelineBuilder {
         id: "output",
         name: "Output",
         targetFilePath: parsed.targetFilePath,
+        sheets: parsed.targetSheetNames,
         ranges: outputRanges
       }
     };
