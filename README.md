@@ -2,7 +2,6 @@
 
 Excel2Graph helps you understand and improve spreadsheet logic by turning an Excel workbook into a visual dependency map.
 
-Instead of tracing formulas manually cell by cell, you can upload a workbook, see how everything connects, make changes, validate your logic, and export an updated Excel file.
 
 ## What This Project Does
 
