@@ -125,6 +125,10 @@ export class FormulaGrouper {
         const outputCells = sortCells(connected.map((cell) => cell.cell));
         const anchorCell = outputCells[0];
         const outputRange = collapseCellsToRange(outputCells);
+        const formulaByCell: Record<string, string> = {};
+        for (const cell of connected) {
+          formulaByCell[cell.cell.toUpperCase()] = cell.formula;
+        }
         const inputMap = new Map<string, Set<string>>();
 
         for (const cell of connected) {
@@ -151,6 +155,8 @@ export class FormulaGrouper {
             range: outputRange
           },
           formula: connected[0].formula,
+          formulaTemplate: connected[0].formula,
+          formulaByCell,
           structureKey: bucket.structureKey,
           anchorCell,
           outputCells

@@ -19,9 +19,17 @@ export interface FormulaNodeConfig {
   inputs: PipelineRange[];
   output: PipelineRange;
   formula: string;
+  formulaTemplate: string;
+  formulaByCell: Record<string, string>;
   structureKey: string;
   anchorCell: string;
   outputCells: string[];
+}
+
+export interface FormulaCellEdit {
+  outputCell: string;
+  formula?: string;
+  newOutputCell?: string;
 }
 
 export interface OutputNodeConfig {
@@ -76,6 +84,12 @@ export interface PipelineNodeUpdate {
   formula?: string;
   inputs?: PipelineRange[];
   output?: PipelineRange;
+  formulaByCell?: Record<string, string>;
+  cellEdits?: FormulaCellEdit[];
+  ranges?: PipelineRange[];
+  sheets?: string[];
+  filePath?: string;
+  targetFilePath?: string;
 }
 
 export interface ParsedFormulaCell {

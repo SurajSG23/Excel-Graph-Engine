@@ -350,9 +350,12 @@ export class ExecutionEngine {
     for (const node of formulasInOrder) {
       const outputCells = node.outputCells.length > 0 ? node.outputCells : expandRange(node.output.range);
       const computed: CellValue[] = [];
+      const template = node.formulaTemplate || node.formula;
+      const byCell = node.formulaByCell ?? {};
 
       for (const outCell of outputCells) {
-        const translated = translateFormula(node.formula, node.anchorCell, outCell, node.output.sheet);
+        const key = outCell.toUpperCase();
+        const translated = byCell[key] ?? translateFormula(template, node.anchorCell, outCell, node.output.sheet);
         let value: CellValue = 0;
         try {
           value = evaluateFormula(translated, node.output.sheet, values);

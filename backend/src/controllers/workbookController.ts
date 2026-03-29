@@ -8,7 +8,8 @@ import {
   pipelineValidator,
   workbookSessionService
 } from "../services/serviceContainer";
-import { PipelineNodeUpdate, PipelineRange } from "../models/pipeline";
+import { FormulaNodeConfig, PipelineNodeUpdate, PipelineRange } from "../models/pipeline";
+import { collapseCellsToRange, expandRange, extractFormulaRefs, parseCell, parseRefToken, toCell } from "../core/node_models";
 
 function resolveUploadPath(req: Request, field: string): string | undefined {
   const files = (req.files as Record<string, Express.Multer.File[]>) ?? {};
@@ -26,6 +27,254 @@ function normalizeRanges(ranges: PipelineRange[] | undefined): PipelineRange[] |
       sheet: item.sheet.trim(),
       range: item.range.trim().toUpperCase()
     }));
+}
+
+function normalizeSheets(sheets: string[] | undefined): string[] | undefined {
+  if (!sheets) {
+    return undefined;
+  }
+
+  const out = sheets
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return [...new Set(out)];
+}
+
+function normalizeCellRef(cell: string): string {
+  return cell.trim().toUpperCase();
+}
+
+function normalizeCellFormulaMap(map: Record<string, string> | undefined): Record<string, string> {
+  if (!map) {
+    return {};
+  }
+
+  const out: Record<string, string> = {};
+  for (const [cell, formula] of Object.entries(map)) {
+    const normalizedCell = normalizeCellRef(cell);
+    const normalizedFormula = formula.trim();
+    if (!normalizedCell || !normalizedFormula) {
+      continue;
+    }
+    out[normalizedCell] = normalizedFormula;
+  }
+  return out;
+}
+
+function sortCells(cells: string[]): string[] {
+  return [...cells].sort((left, right) => {
+    const l = parseCell(left);
+    const r = parseCell(right);
+    if (!l || !r) {
+      return left.localeCompare(right);
+    }
+    if (l.row !== r.row) {
+      return l.row - r.row;
+    }
+    return l.col - r.col;
+  });
+}
+
+function buildOutputRange(cells: string[]): string {
+  return sortCells(cells).join(",");
+}
+
+function translateFormula(formula: string, fromCell: string, toCellRef: string, outputSheet: string): string {
+  const from = parseCell(fromCell);
+  const to = parseCell(toCellRef);
+  if (!from || !to) {
+    return formula;
+  }
+
+  const dRow = to.row - from.row;
+  const dCol = to.col - from.col;
+
+  return formula.replace(
+    /((?:'[^']+'|[A-Za-z0-9_\.]+)!|)(\$?)([A-Z]{1,3})(\$?)([0-9]+)/g,
+    (_raw, sheetPrefix: string, absCol: string, colText: string, absRow: string, rowText: string) => {
+      const base = parseCell(`${colText}${rowText}`);
+      if (!base) {
+        return _raw;
+      }
+
+      const nextCol = absCol ? base.col : base.col + dCol;
+      const nextRow = absRow ? base.row : base.row + dRow;
+      if (nextCol < 1 || nextRow < 1) {
+        return _raw;
+      }
+
+      const nextCell = toCell(nextRow, nextCol);
+      return `${sheetPrefix || `${outputSheet}!`}${nextCell}`;
+    }
+  );
+}
+
+function deriveInputsFromFormulas(formulas: string[], outputSheet: string): PipelineRange[] {
+  const bySheet = new Map<string, Set<string>>();
+
+  for (const formula of formulas) {
+    for (const ref of extractFormulaRefs(formula, outputSheet)) {
+      if (!bySheet.has(ref.sheet)) {
+        bySheet.set(ref.sheet, new Set());
+      }
+      bySheet.get(ref.sheet)!.add(ref.cell);
+    }
+  }
+
+  return [...bySheet.entries()].map(([sheet, cells]) => ({
+    sheet,
+    range: collapseCellsToRange([...cells])
+  }));
+}
+
+function buildFormulaForCell(node: FormulaNodeConfig, cell: string): string {
+  const normalized = normalizeCellRef(cell);
+  if (node.formulaByCell?.[normalized]) {
+    return node.formulaByCell[normalized];
+  }
+  const template = node.formulaTemplate || node.formula;
+  return translateFormula(template, node.anchorCell, normalized, node.output.sheet);
+}
+
+function parseInputsForCell(formula: string, outputSheet: string): string[] {
+  const refs = extractFormulaRefs(formula, outputSheet)
+    .map((item) => `${item.sheet}!${item.cell}`)
+    .filter(Boolean);
+  return [...new Set(refs)];
+}
+
+function ensureUniqueId(existingIds: Set<string>, preferred: string): string {
+  if (!existingIds.has(preferred)) {
+    existingIds.add(preferred);
+    return preferred;
+  }
+
+  let counter = 2;
+  while (existingIds.has(`${preferred}-${counter}`)) {
+    counter += 1;
+  }
+  const next = `${preferred}-${counter}`;
+  existingIds.add(next);
+  return next;
+}
+
+function applyFormulaPatch(node: FormulaNodeConfig, patch: PipelineNodeUpdate, existingIds: Set<string>): FormulaNodeConfig[] {
+  const baseOutput = patch.output
+    ? {
+        sheet: patch.output.sheet.trim(),
+        range: patch.output.range.trim().toUpperCase()
+      }
+    : node.output;
+  const outputCells = patch.output
+    ? sortCells(expandRange(baseOutput.range))
+    : sortCells(node.outputCells.length > 0 ? node.outputCells : expandRange(node.output.range));
+
+  const nextTemplate = typeof patch.formula === "string" ? patch.formula.trim() : (node.formulaTemplate || node.formula);
+  const normalizedByCellPatch = normalizeCellFormulaMap(patch.formulaByCell);
+
+  if (!patch.cellEdits || patch.cellEdits.length === 0) {
+    const formulaByCell: Record<string, string> = {};
+    for (const cell of outputCells) {
+      formulaByCell[cell] = normalizedByCellPatch[cell] ?? translateFormula(nextTemplate, outputCells[0] ?? node.anchorCell, cell, baseOutput.sheet);
+    }
+
+    const formulas = Object.values(formulaByCell);
+    return [
+      {
+        ...node,
+        formula: nextTemplate,
+        formulaTemplate: nextTemplate,
+        formulaByCell,
+        inputs: normalizeRanges(patch.inputs) ?? deriveInputsFromFormulas(formulas, baseOutput.sheet),
+        output: baseOutput,
+        anchorCell: outputCells[0] ?? node.anchorCell,
+        outputCells
+      }
+    ];
+  }
+
+  const editsByCell = new Map(
+    patch.cellEdits
+      .map((item) => ({
+        ...item,
+        outputCell: normalizeCellRef(item.outputCell),
+        newOutputCell: item.newOutputCell ? normalizeCellRef(item.newOutputCell) : undefined,
+        formula: item.formula?.trim()
+      }))
+      .filter((item) => item.outputCell)
+      .map((item) => [item.outputCell, item])
+  );
+
+  const remainingCells: string[] = [];
+  const remainingFormulaByCell: Record<string, string> = {};
+  const detachedNodes: FormulaNodeConfig[] = [];
+
+  for (const cell of outputCells) {
+    const edit = editsByCell.get(cell);
+    const baseFormula = buildFormulaForCell(
+      {
+        ...node,
+        formulaTemplate: nextTemplate,
+        formulaByCell: {
+          ...node.formulaByCell,
+          ...normalizedByCellPatch
+        }
+      },
+      cell
+    );
+
+    if (!edit) {
+      remainingCells.push(cell);
+      remainingFormulaByCell[cell] = baseFormula;
+      continue;
+    }
+
+    const movedCell = edit.newOutputCell ?? cell;
+    const nextFormula = edit.formula
+      ? edit.formula
+      : (movedCell !== cell ? translateFormula(baseFormula, cell, movedCell, baseOutput.sheet) : baseFormula);
+    const nextId = ensureUniqueId(existingIds, `${node.id}__${movedCell}`);
+
+    detachedNodes.push({
+      ...node,
+      id: nextId,
+      name: `${node.name} ${movedCell}`,
+      inputs: deriveInputsFromFormulas([nextFormula], baseOutput.sheet),
+      output: {
+        sheet: baseOutput.sheet,
+        range: movedCell
+      },
+      formula: nextFormula,
+      formulaTemplate: nextFormula,
+      formulaByCell: {
+        [movedCell]: nextFormula
+      },
+      structureKey: `${node.structureKey}:${movedCell}`,
+      anchorCell: movedCell,
+      outputCells: [movedCell]
+    });
+  }
+
+  const merged: FormulaNodeConfig[] = [];
+  if (remainingCells.length > 0) {
+    const remainingFormulas = Object.values(remainingFormulaByCell);
+    merged.push({
+      ...node,
+      formula: nextTemplate,
+      formulaTemplate: nextTemplate,
+      formulaByCell: remainingFormulaByCell,
+      inputs: deriveInputsFromFormulas(remainingFormulas, baseOutput.sheet),
+      output: {
+        sheet: baseOutput.sheet,
+        range: buildOutputRange(remainingCells)
+      },
+      anchorCell: sortCells(remainingCells)[0] ?? node.anchorCell,
+      outputCells: sortCells(remainingCells)
+    });
+  }
+
+  return [...merged, ...detachedNodes];
 }
 
 export class WorkbookController {
@@ -134,78 +383,46 @@ export class WorkbookController {
         return;
       }
 
-      const nextFormulas = session.workbook.config.formulas.map((node) => {
-        const patch = updates?.find((item) => item.id === node.id);
+      const safeUpdates = updates ?? [];
+      const inputPatch = safeUpdates.find((item) => item.id === "input");
+      const outputPatch = safeUpdates.find((item) => item.id === "output");
+
+      const existingIds = new Set(session.workbook.config.formulas.map((item) => item.id));
+      const nextFormulas = session.workbook.config.formulas.flatMap((node) => {
+        const patch = safeUpdates.find((item) => item.id === node.id);
         if (!patch) {
-          return node;
+          return [node];
         }
 
-        const formula = typeof patch.formula === "string" ? patch.formula.trim() : node.formula;
-        const inputs = normalizeRanges(patch.inputs) ?? node.inputs;
-        const output = patch.output
-          ? {
-              sheet: patch.output.sheet.trim(),
-              range: patch.output.range.trim().toUpperCase()
-            }
-          : node.output;
-
-        return {
-          ...node,
-          formula,
-          inputs,
-          output,
-          outputCells: output.range
-            .split(",")
-            .map((segment) => segment.trim())
-            .filter(Boolean)
-            .flatMap((segment) => {
-              const [left, right] = segment.includes(":")
-                ? (segment.split(":") as [string, string])
-                : ([segment, segment] as [string, string]);
-              const [lCol, lRow] = [left.replace(/[0-9]/g, ""), Number(left.replace(/[A-Z]/g, ""))];
-              const [rCol, rRow] = [right.replace(/[0-9]/g, ""), Number(right.replace(/[A-Z]/g, ""))];
-              if (!lCol || !rCol || !Number.isFinite(lRow) || !Number.isFinite(rRow)) {
-                return [] as string[];
-              }
-              const colToNum = (col: string): number => {
-                let total = 0;
-                for (const ch of col) {
-                  total = total * 26 + (ch.charCodeAt(0) - 64);
-                }
-                return total;
-              };
-              const numToCol = (num: number): string => {
-                let n = num;
-                let out = "";
-                while (n > 0) {
-                  const rem = (n - 1) % 26;
-                  out = String.fromCharCode(65 + rem) + out;
-                  n = Math.floor((n - 1) / 26);
-                }
-                return out;
-              };
-              const minCol = Math.min(colToNum(lCol), colToNum(rCol));
-              const maxCol = Math.max(colToNum(lCol), colToNum(rCol));
-              const minRow = Math.min(lRow, rRow);
-              const maxRow = Math.max(lRow, rRow);
-              const cells: string[] = [];
-              for (let row = minRow; row <= maxRow; row += 1) {
-                for (let col = minCol; col <= maxCol; col += 1) {
-                  cells.push(`${numToCol(col)}${row}`);
-                }
-              }
-              return cells;
-            })
-        };
+        existingIds.delete(node.id);
+        return applyFormulaPatch(node, patch, existingIds);
       });
 
+      const nextInput = {
+        ...session.workbook.config.input,
+        filePath:
+          typeof inputPatch?.filePath === "string" && inputPatch.filePath.trim().length > 0
+            ? inputPatch.filePath.trim()
+            : session.workbook.config.input.filePath,
+        sheets: normalizeSheets(inputPatch?.sheets) ?? session.workbook.config.input.sheets,
+        ranges: normalizeRanges(inputPatch?.ranges) ?? session.workbook.config.input.ranges
+      };
+
+      const nextOutputRanges = normalizeRanges(outputPatch?.ranges);
+      const nextOutput = {
+        ...session.workbook.config.output,
+        targetFilePath:
+          typeof outputPatch?.targetFilePath === "string" && outputPatch.targetFilePath.trim().length > 0
+            ? outputPatch.targetFilePath.trim()
+            : session.workbook.config.output.targetFilePath,
+        sheets: normalizeSheets(outputPatch?.sheets) ?? session.workbook.config.output.sheets,
+        ranges: nextOutputRanges ?? nextFormulas.map((item) => item.output)
+      };
+
       const rebuilt = pipelineBuilder.rebuild({
-        ...session.workbook.config,
+        input: nextInput,
         formulas: nextFormulas,
-        output: {
-          ...session.workbook.config.output,
-          ranges: nextFormulas.map((item) => item.output)
-        }
+        output: nextOutput
       });
 
       const ordered = rebuilt.executionOrder
@@ -336,23 +553,40 @@ export class WorkbookController {
         return;
       }
 
-      const computed = executionEngineService.recompute(session.workbook.nodes);
-      const validationIssues = validationService.validate(computed.nodes, session.workbook.files);
+      const rebuilt = pipelineBuilder.rebuild(session.workbook.config);
+      const ordered = rebuilt.executionOrder
+        .map((id) => rebuilt.config.formulas.find((item) => item.id === id))
+        .filter((item): item is NonNullable<typeof item> => Boolean(item));
+      const execution = executionEngine.execute(session.parsedWorkbook, ordered, session.parsedWorkbook.values);
+      const validationIssues = [
+        ...pipelineValidator.validate(rebuilt.config, rebuilt.executionOrder),
+        ...execution.issues.map((issue) => ({
+          type: "INVALID_FORMULA" as const,
+          nodeId: issue.nodeId,
+          message: issue.message
+        }))
+      ];
 
-      const updatedWorkbook = workbookSessionService.updateWorkbook(
+      const workbook = workbookSessionService.updateWorkbook(
         workbookId,
         {
-          ...session.workbook,
           workbookId,
-          nodes: computed.nodes,
-          templateMappings: templateMappingService.deriveFromNodes(computed.nodes),
-          validationIssues: [...validationIssues, ...computed.issues]
+          config: rebuilt.config,
+          graph: rebuilt.graph,
+          validationIssues,
+          executionOrder: rebuilt.executionOrder,
+          nodeResults: execution.nodeResults
         },
-        label || "Run pipeline"
+        label ?? "Run pipeline"
       );
 
+      workbookSessionService.setParsedWorkbook(workbookId, {
+        ...session.parsedWorkbook,
+        values: execution.values
+      });
+
       res.status(200).json({
-        workbook: updatedWorkbook,
+        workbook,
         versions: workbookSessionService.getVersions(workbookId)
       });
     } catch (error) {
