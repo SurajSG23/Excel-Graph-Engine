@@ -100,6 +100,22 @@ function sortCells(cells: string[]): string[] {
   });
 }
 
+function buildInputTemplate(mapping: string[]): string {
+  if (mapping.length === 0) {
+    return "";
+  }
+
+  return mapping
+    .map((item) => {
+      const [sheet, cell] = item.includes("!")
+        ? (item.split("!") as [string, string])
+        : (["", item] as [string, string]);
+      const col = cell.replace(/[0-9]/g, "").replace(/\$/g, "").toUpperCase();
+      return sheet ? `${sheet}!${col}` : col;
+    })
+    .join(", ");
+}
+
 export class FormulaGrouper {
   group(formulaCells: ParsedFormulaCell[]): FormulaNodeConfig[] {
     const buckets = new Map<string, GroupBucket>();
@@ -126,8 +142,11 @@ export class FormulaGrouper {
         const anchorCell = outputCells[0];
         const outputRange = collapseCellsToRange(outputCells);
         const formulaByCell: Record<string, string> = {};
+        const inputMappingByCell: Record<string, string[]> = {};
         for (const cell of connected) {
-          formulaByCell[cell.cell.toUpperCase()] = cell.formula;
+          const outputCell = cell.cell.toUpperCase();
+          formulaByCell[outputCell] = cell.formula;
+          inputMappingByCell[outputCell] = extractFormulaRefs(cell.formula, cell.sheet).map((ref) => `${ref.sheet}!${ref.cell}`);
         }
         const inputMap = new Map<string, Set<string>>();
 
@@ -150,6 +169,8 @@ export class FormulaGrouper {
           id: `formula-${index}`,
           name: `Formula ${index}`,
           inputs,
+          inputTemplate: buildInputTemplate(inputMappingByCell[anchorCell.toUpperCase()] ?? []),
+          inputMappingByCell,
           output: {
             sheet: bucket.sheet,
             range: outputRange

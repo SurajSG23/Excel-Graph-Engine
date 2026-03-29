@@ -27,6 +27,17 @@ interface InputCellDraft {
   id: string;
   sheet: string;
   cell: string;
+  value: string;
+}
+
+interface OutputCellDraft {
+  formulaId: string;
+  formulaName: string;
+  sourceOutputCell: string;
+  outputCell: string;
+  formula: string;
+  inputsText: string;
+  result: string;
 }
 
 function rangesToText(ranges: PipelineRange[]): string {
@@ -218,7 +229,7 @@ function cellLooksValid(value: string): boolean {
   return /^[A-Z]{1,3}[0-9]+$/i.test(value.trim());
 }
 
-function rangesToDetailedCells(ranges: PipelineRange[]): InputCellDraft[] {
+function rangesToDetailedCells(ranges: PipelineRange[], valuesByCell: Record<string, string | number | boolean>): InputCellDraft[] {
   const rows: InputCellDraft[] = [];
   let index = 1;
 
@@ -228,7 +239,8 @@ function rangesToDetailedCells(ranges: PipelineRange[]): InputCellDraft[] {
       rows.push({
         id: `${range.sheet}:${cell}:${index}`,
         sheet: range.sheet,
-        cell
+        cell,
+        value: String(valuesByCell[`${range.sheet}!${cell}`] ?? "")
       });
       index += 1;
     }
@@ -386,7 +398,9 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
   const [detailedDrafts, setDetailedDrafts] = useState<Record<string, DetailedFormulaDraft>>({});
 
   const [outputStatus, setOutputStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [outputViewMode, setOutputViewMode] = useState<"grouped" | "detailed">("grouped");
   const [outputFlowDrafts, setOutputFlowDrafts] = useState<Record<string, OutputFlowEditDraft>>({});
+  const [outputDetailedDrafts, setOutputDetailedDrafts] = useState<Record<string, { outputCell: string; formula: string; inputsText: string }>>({});
 
   useEffect(() => {
     if (!workbook) {
@@ -395,7 +409,7 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
       return;
     }
     setInputRangesDraft(workbook.config.input.ranges);
-    setInputDetailedDrafts(rangesToDetailedCells(workbook.config.input.ranges));
+    setInputDetailedDrafts(rangesToDetailedCells(workbook.config.input.ranges, workbook.inputValuesByCell ?? {}));
   }, [workbook]);
 
   useEffect(() => {
@@ -420,11 +434,13 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
     for (const cell of outputCells) {
       const expression = formulaNode.formulaByCell?.[cell]
         ?? translateFormulaForOutput(formulaNode.formulaTemplate || formulaNode.formula, formulaNode.anchorCell, cell, formulaNode.output.sheet);
+      const defaultInputs = formulaNode.inputMappingByCell?.[cell]
+        ?? parseFormulaInputs(expression, formulaNode.output.sheet);
       drafts[cell] = {
         sourceOutputCell: cell,
         outputCell: cell,
         formula: expression,
-        inputsText: parseFormulaInputs(expression, formulaNode.output.sheet).join(", ")
+        inputsText: defaultInputs.join(", ")
       };
     }
     setDetailedDrafts(drafts);
@@ -433,10 +449,12 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
   useEffect(() => {
     if (!workbook) {
       setOutputFlowDrafts({});
+      setOutputDetailedDrafts({});
       return;
     }
 
     const drafts: Record<string, OutputFlowEditDraft> = {};
+    const detailed: Record<string, { outputCell: string; formula: string; inputsText: string }> = {};
     for (const node of workbook.config.formulas) {
       drafts[node.id] = {
         formula: node.formula,
@@ -444,8 +462,21 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
         outputSheet: node.output.sheet,
         outputRange: node.output.range
       };
+
+      const outputCells = node.outputCells.length > 0 ? node.outputCells : expandRangeCells(node.output.range);
+      outputCells.forEach((cell) => {
+        const defaultFormula = node.formulaByCell?.[cell]
+          ?? translateFormulaForOutput(node.formulaTemplate || node.formula, node.anchorCell, cell, node.output.sheet);
+        const defaultInputs = node.inputMappingByCell?.[cell] ?? parseFormulaInputs(defaultFormula, node.output.sheet);
+        detailed[`${node.id}:${cell}`] = {
+          outputCell: cell,
+          formula: defaultFormula,
+          inputsText: defaultInputs.join(", ")
+        };
+      });
     }
     setOutputFlowDrafts(drafts);
+    setOutputDetailedDrafts(detailed);
   }, [workbook]);
 
   const inputSummary = useMemo(() => {
@@ -463,7 +494,7 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
       return new Set<string>();
     }
     return new Set(
-      rangesToDetailedCells(workbook.config.input.ranges)
+      rangesToDetailedCells(workbook.config.input.ranges, workbook.inputValuesByCell ?? {})
         .map((item) => `${item.sheet}!${item.cell}`)
     );
   }, [workbook]);
@@ -472,6 +503,14 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
     () => new Set(inputDetailedDrafts.map((item) => `${item.sheet.trim()}!${item.cell.trim().toUpperCase()}`)),
     [inputDetailedDrafts]
   );
+
+  const inputDetailedValuesByKey = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const item of inputDetailedDrafts) {
+      out.set(`${item.sheet.trim()}!${item.cell.trim().toUpperCase()}`, item.value);
+    }
+    return out;
+  }, [inputDetailedDrafts]);
 
   const inputDetailedModifiedCount = useMemo(() => {
     let modified = 0;
@@ -485,8 +524,18 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
         modified += 1;
       }
     }
+
+    if (workbook) {
+      for (const [key, value] of Object.entries(workbook.inputValuesByCell ?? {})) {
+        const draftValue = inputDetailedValuesByKey.get(key);
+        if (draftValue !== undefined && String(value ?? "") !== draftValue) {
+          modified += 1;
+        }
+      }
+    }
+
     return modified;
-  }, [inputDetailedBaselineKeys, inputDetailedCurrentKeys]);
+  }, [inputDetailedBaselineKeys, inputDetailedCurrentKeys, inputDetailedValuesByKey, workbook]);
 
   const inputDetailedSummary = useMemo(() => {
     const ranges = detailedCellsToRanges(inputDetailedDrafts);
@@ -569,6 +618,48 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
     [formulaDetailedRows]
   );
 
+  const outputDetailedRows = useMemo(() => {
+    if (!workbook) {
+      return [] as Array<OutputCellDraft & { modified: boolean }>;
+    }
+
+    const rows: Array<OutputCellDraft & { modified: boolean }> = [];
+
+    for (const node of workbook.config.formulas) {
+      const values = workbook.nodeResults[node.id] ?? [];
+      const outputCells = node.outputCells.length > 0 ? node.outputCells : expandRangeCells(node.output.range);
+
+      outputCells.forEach((cell, index) => {
+        const key = `${node.id}:${cell}`;
+        const defaultFormula = node.formulaByCell?.[cell]
+          ?? translateFormulaForOutput(node.formulaTemplate || node.formula, node.anchorCell, cell, node.output.sheet);
+        const defaultInputs = (node.inputMappingByCell?.[cell] ?? parseFormulaInputs(defaultFormula, node.output.sheet)).join(", ");
+        const draft = outputDetailedDrafts[key];
+        const outputCell = draft?.outputCell ?? cell;
+        const formula = draft?.formula ?? defaultFormula;
+        const inputsText = draft?.inputsText ?? defaultInputs;
+
+        rows.push({
+          formulaId: node.id,
+          formulaName: node.name,
+          sourceOutputCell: cell,
+          outputCell,
+          formula,
+          inputsText,
+          result: values[index] === undefined ? "-" : String(values[index]),
+          modified: outputCell !== cell || formula.trim() !== defaultFormula.trim() || inputsText.trim() !== defaultInputs.trim()
+        });
+      });
+    }
+
+    return rows;
+  }, [outputDetailedDrafts, workbook]);
+
+  const outputDetailedModifiedCount = useMemo(
+    () => outputDetailedRows.filter((row) => row.modified).length,
+    [outputDetailedRows]
+  );
+
   const formulaValidationError = useMemo(() => {
     const trimmedFormula = formulaText.trim();
     if (!trimmedFormula.startsWith("=")) {
@@ -641,7 +732,14 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
       {
         id: "input",
         ranges: nextRanges,
-        sheets: uniqueSheetsFromRanges(nextRanges)
+        sheets: uniqueSheetsFromRanges(nextRanges),
+        inputValuesByCell: inputViewMode === "detailed"
+          ? Object.fromEntries(
+              inputDetailedDrafts
+                .filter((item) => item.sheet.trim() && cellLooksValid(item.cell))
+                .map((item) => [`${item.sheet.trim()}!${item.cell.trim().toUpperCase()}`, item.value])
+            )
+          : undefined
       },
       inputViewMode === "grouped" ? "Edit input data" : "Edit input cells"
     );
@@ -778,6 +876,55 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
     setOutputStatus({ type: "success", message: "Output flow updated and recalculated." });
   };
 
+  const applyOutputDetailedRow = async (row: OutputCellDraft & { modified: boolean }): Promise<void> => {
+    const normalizedInputs = row.inputsText
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item) => normalizeInputToken(item, workbook?.config.formulas.find((n) => n.id === row.formulaId)?.output.sheet ?? "Sheet1"))
+      .filter((item): item is string => Boolean(item));
+
+    let formula = row.formula.trim();
+    const node = workbook?.config.formulas.find((item) => item.id === row.formulaId);
+    if (!node) {
+      setOutputStatus({ type: "error", message: "Could not locate source formula node." });
+      return;
+    }
+
+    formula = rewriteFormulaInputs(formula, normalizedInputs, node.output.sheet);
+
+    if (!formula.startsWith("=")) {
+      setOutputStatus({ type: "error", message: "Detailed output formula must start with '='." });
+      return;
+    }
+
+    if (!/^[A-Z]{1,3}[0-9]+$/.test(row.outputCell.trim().toUpperCase())) {
+      setOutputStatus({ type: "error", message: "Output cell must be a valid cell reference." });
+      return;
+    }
+
+    const ok = await updateFormulaNode(
+      {
+        id: row.formulaId,
+        cellEdits: [
+          {
+            outputCell: row.sourceOutputCell,
+            formula,
+            newOutputCell: row.outputCell.trim().toUpperCase()
+          }
+        ]
+      },
+      "Edit output detailed cell"
+    );
+
+    if (!ok) {
+      setOutputStatus({ type: "error", message: useWorkbookStore.getState().error ?? "Could not update output cell flow." });
+      return;
+    }
+
+    setOutputStatus({ type: "success", message: `Updated ${row.formulaName} at ${row.sourceOutputCell}.` });
+  };
+
   return (
     <aside className={`dashboard-sidebar ${isOpen ? "is-open" : "is-closed"}`}>
       <div className="sidebar-header">
@@ -835,7 +982,7 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
                 </button>
               </div>
 
-              <div className="flow-block">
+              {/* <div className="flow-block">
                 <div className="flow-block-title-row">
                   <h5>Source File</h5>
                   <span>{displayWorkbookName(workbook.config.input.filePath)}</span>
@@ -844,7 +991,7 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
                   <span>Change source file</span>
                   <input type="file" accept=".xlsx" onChange={(event) => void handleReplaceInputWorkbook(event)} disabled={loading} />
                 </label>
-              </div>
+              </div> */}
 
               {inputViewMode === "grouped" && (
                 <div className="flow-block">
@@ -946,6 +1093,7 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
                         <tr>
                           <th>Sheet</th>
                           <th>Cell</th>
+                          <th>Value</th>
                           <th>Used By</th>
                           <th>Action</th>
                         </tr>
@@ -985,6 +1133,18 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
                                 />
                               </td>
                               <td>
+                                <input
+                                  className="table-cell-input"
+                                  value={row.value}
+                                  onChange={(event) =>
+                                    setInputDetailedDrafts((prev) =>
+                                      prev.map((item) => item.id === row.id ? { ...item, value: event.target.value } : item)
+                                    )
+                                  }
+                                  disabled={loading}
+                                />
+                              </td>
+                              <td>
                                 {workbook.config.formulas.filter((node) =>
                                   node.inputs.some((item) => item.sheet === row.sheet && expandRangeCells(item.range).includes(row.cell.toUpperCase()))
                                 ).length}
@@ -1014,7 +1174,8 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
                         {
                           id: `new:${prev.length + 1}`,
                           sheet: selectableSheets[0] ?? "Sheet1",
-                          cell: "A1"
+                          cell: "A1",
+                          value: ""
                         }
                       ])
                     }
@@ -1244,7 +1405,7 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
               <h4>Output</h4>
               <p className="node-details-lead">Review and edit final output flows in one place.</p>
 
-              <div className="flow-block">
+              {/* <div className="flow-block">
                 <div className="flow-block-title-row">
                   <h5>Target File</h5>
                   <span>{displayWorkbookName(workbook.config.output.targetFilePath)}</span>
@@ -1253,97 +1414,208 @@ export function Sidebar({ isOpen, onToggle, onResizeStart }: SidebarProps) {
                   <span>Change target file</span>
                   <input type="file" accept=".xlsx" onChange={(event) => void handleReplaceOutputWorkbook(event)} disabled={loading} />
                 </label>
-              </div>
+              </div> */}
 
               <div className="flow-block">
-                <h5>Output Flow</h5>
-                <div className="flow-card-list">
-                  {workbook.config.formulas.map((node) => {
-                    const draft = outputFlowDrafts[node.id];
-                    if (!draft) {
-                      return null;
-                    }
+                <div className="flow-block-title-row">
+                  <h5>Output Flow</h5>
+                  <span>{outputDetailedModifiedCount} modified</span>
+                </div>
 
-                    return (
-                      <article className="flow-card" key={`output-flow:${node.id}`}>
-                        <div className="flow-line compact">
-                          <span>{node.inputs.map((item) => `${item.sheet}!${item.range}`).join(", ") || "Inputs"}</span>
-                          <span className="flow-arrow">{"->"}</span>
-                          <span>{node.formula}</span>
-                          <span className="flow-arrow">{"->"}</span>
-                          <span>{node.output.sheet}!{node.output.range}</span>
-                        </div>
+                <div className="view-toggle-row" role="tablist" aria-label="Output view mode">
+                  <button
+                    type="button"
+                    className={`view-toggle-btn ${outputViewMode === "grouped" ? "is-active" : ""}`}
+                    onClick={() => setOutputViewMode("grouped")}
+                  >
+                    Grouped View
+                  </button>
+                  <button
+                    type="button"
+                    className={`view-toggle-btn ${outputViewMode === "detailed" ? "is-active" : ""}`}
+                    onClick={() => setOutputViewMode("detailed")}
+                  >
+                    Detailed View
+                  </button>
+                </div>
 
-                        <label>
-                          <span>Inputs</span>
-                          <textarea
-                            rows={3}
-                            value={draft.inputsText}
-                            onChange={(event) =>
-                              setOutputFlowDrafts((prev) => ({
-                                ...prev,
-                                [node.id]: { ...prev[node.id], inputsText: event.target.value }
-                              }))
-                            }
-                            disabled={loading}
-                          />
-                        </label>
+                {outputViewMode === "grouped" && (
+                  <div className="flow-card-list">
+                    {workbook.config.formulas.map((node) => {
+                      const draft = outputFlowDrafts[node.id];
+                      if (!draft) {
+                        return null;
+                      }
 
-                        <label>
-                          <span>Calculation</span>
-                          <input
-                            value={draft.formula}
-                            onChange={(event) =>
-                              setOutputFlowDrafts((prev) => ({
-                                ...prev,
-                                [node.id]: { ...prev[node.id], formula: event.target.value }
-                              }))
-                            }
-                            disabled={loading}
-                          />
-                        </label>
+                      return (
+                        <article className="flow-card" key={`output-flow:${node.id}`}>
+                          <div className="flow-line compact">
+                            <span>{node.inputs.map((item) => `${item.sheet}!${item.range}`).join(", ") || "Inputs"}</span>
+                            <span className="flow-arrow">{"->"}</span>
+                            <span>{node.formula}</span>
+                            <span className="flow-arrow">{"->"}</span>
+                            <span>{node.output.sheet}!{node.output.range}</span>
+                          </div>
 
-                        <div className="flow-edit-grid">
                           <label>
-                            <span>Output Sheet</span>
-                            <select
-                              value={draft.outputSheet}
+                            <span>Inputs</span>
+                            <textarea
+                              rows={3}
+                              value={draft.inputsText}
                               onChange={(event) =>
                                 setOutputFlowDrafts((prev) => ({
                                   ...prev,
-                                  [node.id]: { ...prev[node.id], outputSheet: event.target.value }
-                                }))
-                              }
-                              disabled={loading}
-                            >
-                              {selectableSheets.map((sheet) => (
-                                <option key={`out-sheet:${node.id}:${sheet}`} value={sheet}>{sheet}</option>
-                              ))}
-                            </select>
-                          </label>
-
-                          <label>
-                            <span>Output Cell / Range</span>
-                            <input
-                              value={draft.outputRange}
-                              onChange={(event) =>
-                                setOutputFlowDrafts((prev) => ({
-                                  ...prev,
-                                  [node.id]: { ...prev[node.id], outputRange: event.target.value.toUpperCase() }
+                                  [node.id]: { ...prev[node.id], inputsText: event.target.value }
                                 }))
                               }
                               disabled={loading}
                             />
                           </label>
-                        </div>
 
-                        <button type="button" onClick={() => void applyOutputFlowChange(node.id)} disabled={loading}>
-                          Apply This Output Flow
-                        </button>
-                      </article>
-                    );
-                  })}
-                </div>
+                          <label>
+                            <span>Calculation</span>
+                            <input
+                              value={draft.formula}
+                              onChange={(event) =>
+                                setOutputFlowDrafts((prev) => ({
+                                  ...prev,
+                                  [node.id]: { ...prev[node.id], formula: event.target.value }
+                                }))
+                              }
+                              disabled={loading}
+                            />
+                          </label>
+
+                          <div className="flow-edit-grid">
+                            <label>
+                              <span>Output Sheet</span>
+                              <select
+                                value={draft.outputSheet}
+                                onChange={(event) =>
+                                  setOutputFlowDrafts((prev) => ({
+                                    ...prev,
+                                    [node.id]: { ...prev[node.id], outputSheet: event.target.value }
+                                  }))
+                                }
+                                disabled={loading}
+                              >
+                                {selectableSheets.map((sheet) => (
+                                  <option key={`out-sheet:${node.id}:${sheet}`} value={sheet}>{sheet}</option>
+                                ))}
+                              </select>
+                            </label>
+
+                            <label>
+                              <span>Output Cell / Range</span>
+                              <input
+                                value={draft.outputRange}
+                                onChange={(event) =>
+                                  setOutputFlowDrafts((prev) => ({
+                                    ...prev,
+                                    [node.id]: { ...prev[node.id], outputRange: event.target.value.toUpperCase() }
+                                  }))
+                                }
+                                disabled={loading}
+                              />
+                            </label>
+                          </div>
+
+                          <button type="button" onClick={() => void applyOutputFlowChange(node.id)} disabled={loading}>
+                            Apply This Output Flow
+                          </button>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {outputViewMode === "detailed" && (
+                  <div className="node-result-table-wrap">
+                    <table className="node-result-table detailed-flow-table">
+                      <thead>
+                        <tr>
+                          <th>Formula Node</th>
+                          <th>From Cell</th>
+                          <th>To Cell</th>
+                          <th>Formula</th>
+                          <th>Inputs</th>
+                          <th>Result</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {outputDetailedRows.map((row) => {
+                          const key = `${row.formulaId}:${row.sourceOutputCell}`;
+                          return (
+                            <tr key={`output-detail:${key}`} className={row.modified ? "row-modified" : ""}>
+                              <td>{row.formulaName}</td>
+                              <td>{row.sourceOutputCell}</td>
+                              <td>
+                                <input
+                                  className="table-cell-input"
+                                  value={row.outputCell}
+                                  onChange={(event) =>
+                                    setOutputDetailedDrafts((prev) => ({
+                                      ...prev,
+                                      [key]: {
+                                        ...(prev[key] ?? { outputCell: row.outputCell, formula: row.formula, inputsText: row.inputsText }),
+                                        outputCell: event.target.value.toUpperCase()
+                                      }
+                                    }))
+                                  }
+                                  disabled={loading}
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  className="table-cell-input"
+                                  value={row.formula}
+                                  onChange={(event) =>
+                                    setOutputDetailedDrafts((prev) => ({
+                                      ...prev,
+                                      [key]: {
+                                        ...(prev[key] ?? { outputCell: row.outputCell, formula: row.formula, inputsText: row.inputsText }),
+                                        formula: event.target.value
+                                      }
+                                    }))
+                                  }
+                                  disabled={loading}
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  className="table-cell-input"
+                                  value={row.inputsText}
+                                  onChange={(event) =>
+                                    setOutputDetailedDrafts((prev) => ({
+                                      ...prev,
+                                      [key]: {
+                                        ...(prev[key] ?? { outputCell: row.outputCell, formula: row.formula, inputsText: row.inputsText }),
+                                        inputsText: event.target.value
+                                      }
+                                    }))
+                                  }
+                                  disabled={loading}
+                                />
+                              </td>
+                              <td>{row.result}</td>
+                              <td>
+                                <button
+                                  type="button"
+                                  className="ghost-btn"
+                                  onClick={() => void applyOutputDetailedRow(row)}
+                                  disabled={loading || !row.modified}
+                                >
+                                  Apply
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
               <div className="flow-block">

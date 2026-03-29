@@ -9,6 +9,8 @@ export interface FormulaNodeConfig {
   id: string;
   name: string;
   inputs: PipelineRange[];
+  inputTemplate: string;
+  inputMappingByCell: Record<string, string[]>;
   output: PipelineRange;
   formula: string;
   formulaTemplate: string;
@@ -71,15 +73,18 @@ export interface PipelineWorkbook {
   validationIssues: ValidationIssue[];
   executionOrder: string[];
   nodeResults: Record<string, CellValue[]>;
+  inputValuesByCell: Record<string, CellValue>;
 }
 
 export interface PipelineNodeUpdate {
   id: string;
   formula?: string;
   inputs?: PipelineRange[];
+  inputMappingByCell?: Record<string, string[]>;
   output?: PipelineRange;
   formulaByCell?: Record<string, string>;
   cellEdits?: FormulaCellEdit[];
+  inputValuesByCell?: Record<string, CellValue>;
   ranges?: PipelineRange[];
   sheets?: string[];
   filePath?: string;

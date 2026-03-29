@@ -8,7 +8,7 @@ import {
   pipelineValidator,
   workbookSessionService
 } from "../services/serviceContainer";
-import { FormulaNodeConfig, PipelineNodeUpdate, PipelineRange } from "../models/pipeline";
+import { CellValue, FormulaNodeConfig, PipelineNodeUpdate, PipelineRange } from "../models/pipeline";
 import { collapseCellsToRange, expandRange, extractFormulaRefs, parseCell, parseRefToken, toCell } from "../core/node_models";
 
 function resolveUploadPath(req: Request, field: string): string | undefined {
@@ -58,6 +58,78 @@ function normalizeCellFormulaMap(map: Record<string, string> | undefined): Recor
       continue;
     }
     out[normalizedCell] = normalizedFormula;
+  }
+  return out;
+}
+
+function normalizeCellValue(value: unknown): CellValue {
+  if (typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+
+  const text = String(value ?? "").trim();
+  if (/^-?\d+(?:\.\d+)?$/.test(text)) {
+    return Number(text);
+  }
+  if (/^true$/i.test(text)) {
+    return true;
+  }
+  if (/^false$/i.test(text)) {
+    return false;
+  }
+  return text;
+}
+
+function normalizeInputValuesMap(map: Record<string, CellValue> | undefined, defaultSheet: string): Record<string, CellValue> {
+  if (!map) {
+    return {};
+  }
+
+  const out: Record<string, CellValue> = {};
+  for (const [key, raw] of Object.entries(map)) {
+    const parsed = parseRefToken(key, defaultSheet);
+    const cell = normalizeCellRef(parsed.cell);
+    if (!cell) {
+      continue;
+    }
+    out[`${parsed.sheet}!${cell}`] = normalizeCellValue(raw);
+  }
+  return out;
+}
+
+function cloneValues(values: Record<string, Record<string, CellValue>>): Record<string, Record<string, CellValue>> {
+  const out: Record<string, Record<string, CellValue>> = {};
+  for (const [sheet, entries] of Object.entries(values)) {
+    out[sheet] = { ...entries };
+  }
+  return out;
+}
+
+function applyInputValues(
+  values: Record<string, Record<string, CellValue>>,
+  updates: Record<string, CellValue>
+): Record<string, Record<string, CellValue>> {
+  const out = cloneValues(values);
+  for (const [key, value] of Object.entries(updates)) {
+    const [sheet, cell] = key.split("!") as [string, string];
+    if (!out[sheet]) {
+      out[sheet] = {};
+    }
+    out[sheet][cell] = value;
+  }
+  return out;
+}
+
+function buildInputValueSnapshot(
+  ranges: PipelineRange[],
+  values: Record<string, Record<string, CellValue>>
+): Record<string, CellValue> {
+  const out: Record<string, CellValue> = {};
+  for (const item of ranges) {
+    for (const cell of expandRange(item.range)) {
+      const value = values[item.sheet]?.[cell];
+      out[`${item.sheet}!${cell}`] = value ?? "";
+    }
   }
   return out;
 }
@@ -128,6 +200,26 @@ function deriveInputsFromFormulas(formulas: string[], outputSheet: string): Pipe
   }));
 }
 
+function deriveInputTemplate(mapping: string[]): string {
+  return mapping
+    .map((item) => {
+      const [sheet, cell] = item.includes("!")
+        ? (item.split("!") as [string, string])
+        : (["", item] as [string, string]);
+      const col = cell.replace(/[0-9]/g, "").replace(/\$/g, "").toUpperCase();
+      return sheet ? `${sheet}!${col}` : col;
+    })
+    .join(", ");
+}
+
+function deriveInputMappingByCell(formulaByCell: Record<string, string>, outputSheet: string): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const [cell, formula] of Object.entries(formulaByCell)) {
+    out[cell] = extractFormulaRefs(formula, outputSheet).map((ref) => `${ref.sheet}!${ref.cell}`);
+  }
+  return out;
+}
+
 function buildFormulaForCell(node: FormulaNodeConfig, cell: string): string {
   const normalized = normalizeCellRef(cell);
   if (node.formulaByCell?.[normalized]) {
@@ -180,12 +272,15 @@ function applyFormulaPatch(node: FormulaNodeConfig, patch: PipelineNodeUpdate, e
     }
 
     const formulas = Object.values(formulaByCell);
+    const inputMappingByCell = patch.inputMappingByCell ?? deriveInputMappingByCell(formulaByCell, baseOutput.sheet);
     return [
       {
         ...node,
         formula: nextTemplate,
         formulaTemplate: nextTemplate,
         formulaByCell,
+        inputMappingByCell,
+        inputTemplate: deriveInputTemplate(inputMappingByCell[outputCells[0] ?? node.anchorCell] ?? []),
         inputs: normalizeRanges(patch.inputs) ?? deriveInputsFromFormulas(formulas, baseOutput.sheet),
         output: baseOutput,
         anchorCell: outputCells[0] ?? node.anchorCell,
@@ -241,6 +336,10 @@ function applyFormulaPatch(node: FormulaNodeConfig, patch: PipelineNodeUpdate, e
       id: nextId,
       name: `${node.name} ${movedCell}`,
       inputs: deriveInputsFromFormulas([nextFormula], baseOutput.sheet),
+      inputTemplate: deriveInputTemplate(parseInputsForCell(nextFormula, baseOutput.sheet)),
+      inputMappingByCell: {
+        [movedCell]: parseInputsForCell(nextFormula, baseOutput.sheet)
+      },
       output: {
         sheet: baseOutput.sheet,
         range: movedCell
@@ -259,11 +358,14 @@ function applyFormulaPatch(node: FormulaNodeConfig, patch: PipelineNodeUpdate, e
   const merged: FormulaNodeConfig[] = [];
   if (remainingCells.length > 0) {
     const remainingFormulas = Object.values(remainingFormulaByCell);
+    const remainingInputMappingByCell = deriveInputMappingByCell(remainingFormulaByCell, baseOutput.sheet);
     merged.push({
       ...node,
       formula: nextTemplate,
       formulaTemplate: nextTemplate,
       formulaByCell: remainingFormulaByCell,
+      inputMappingByCell: remainingInputMappingByCell,
+      inputTemplate: deriveInputTemplate(remainingInputMappingByCell[sortCells(remainingCells)[0] ?? node.anchorCell] ?? []),
       inputs: deriveInputsFromFormulas(remainingFormulas, baseOutput.sheet),
       output: {
         sheet: baseOutput.sheet,
@@ -322,7 +424,8 @@ export class WorkbookController {
             graph: built.graph,
             validationIssues,
             executionOrder: built.executionOrder,
-            nodeResults: execution.nodeResults
+            nodeResults: execution.nodeResults,
+            inputValuesByCell: buildInputValueSnapshot(built.config.input.ranges, execution.values)
           },
           "Upload workbook"
         );
@@ -344,7 +447,8 @@ export class WorkbookController {
           graph: built.graph,
           validationIssues,
           executionOrder: built.executionOrder,
-          nodeResults: execution.nodeResults
+          nodeResults: execution.nodeResults,
+          inputValuesByCell: buildInputValueSnapshot(built.config.input.ranges, execution.values)
         },
         {
           ...parsed,
@@ -386,6 +490,7 @@ export class WorkbookController {
       const safeUpdates = updates ?? [];
       const inputPatch = safeUpdates.find((item) => item.id === "input");
       const outputPatch = safeUpdates.find((item) => item.id === "output");
+      const normalizedInputValues = normalizeInputValuesMap(inputPatch?.inputValuesByCell, session.workbook.config.input.sheets[0] ?? "Sheet1");
 
       const existingIds = new Set(session.workbook.config.formulas.map((item) => item.id));
       const nextFormulas = session.workbook.config.formulas.flatMap((node) => {
@@ -428,7 +533,8 @@ export class WorkbookController {
       const ordered = rebuilt.executionOrder
         .map((id) => rebuilt.config.formulas.find((item) => item.id === id))
         .filter((item): item is NonNullable<typeof item> => Boolean(item));
-      const execution = executionEngine.execute(session.parsedWorkbook, ordered, session.parsedWorkbook.values);
+      const startingValues = applyInputValues(session.parsedWorkbook.values, normalizedInputValues);
+      const execution = executionEngine.execute(session.parsedWorkbook, ordered, startingValues);
       const validationIssues = [
         ...pipelineValidator.validate(rebuilt.config, rebuilt.executionOrder),
         ...execution.issues.map((issue) => ({
@@ -446,7 +552,8 @@ export class WorkbookController {
           graph: rebuilt.graph,
           validationIssues,
           executionOrder: rebuilt.executionOrder,
-          nodeResults: execution.nodeResults
+          nodeResults: execution.nodeResults,
+          inputValuesByCell: buildInputValueSnapshot(rebuilt.config.input.ranges, execution.values)
         },
         label ?? "Edit formula node"
       );
@@ -575,7 +682,8 @@ export class WorkbookController {
           graph: rebuilt.graph,
           validationIssues,
           executionOrder: rebuilt.executionOrder,
-          nodeResults: execution.nodeResults
+          nodeResults: execution.nodeResults,
+          inputValuesByCell: buildInputValueSnapshot(rebuilt.config.input.ranges, execution.values)
         },
         label ?? "Run pipeline"
       );
